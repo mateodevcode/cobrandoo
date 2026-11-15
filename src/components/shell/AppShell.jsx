@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Plus } from "lucide-react";
+import { Banknote, HandCoins, LogOut, Plus, Receipt, UserPlus } from "lucide-react";
+import { Hoja } from "@/components/ui/Hoja";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { NOMBRE_ROL } from "@/lib/roles";
@@ -14,7 +16,8 @@ export function AppShell({ usuario, children }) {
   const pathname = usePathname();
   const router = useRouter();
   const menu = menuPara(usuario.rol);
-  const conBotonAccion = usuario.rol === "cobrador" || usuario.rol === "supervisor";
+  const conBotonAccion = usuario.rol !== "super_admin";
+  const [acciones, setAcciones] = useState(false);
 
   async function salir() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -101,11 +104,11 @@ export function AppShell({ usuario, children }) {
           className="fixed inset-x-0 bottom-0 z-30 border-t border-borde bg-superficie pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
           <ul className="relative grid h-16 grid-cols-5 items-center">
-            {menuMovil(menu, conBotonAccion).map((item, i) =>
+            {menuMovil(menu.filter((m) => m.movil !== false), conBotonAccion).map((item, i) =>
               item === "accion" ? (
                 <li key="accion" className="flex justify-center">
                   <button
-                    onClick={pronto}
+                    onClick={() => setAcciones(true)}
                     className="-mt-8 flex size-14 items-center justify-center rounded-full bg-acento-oscuro text-white shadow-lg shadow-acento-oscuro/40"
                     aria-label="Nuevo cobro o préstamo"
                   >
@@ -136,9 +139,34 @@ export function AppShell({ usuario, children }) {
           </ul>
         </nav>
       )}
+
+      <Hoja abierta={acciones} onCerrar={() => setAcciones(false)} titulo="¿Qué quieres hacer?">
+        <div className="grid grid-cols-2 gap-3">
+          {ACCIONES.map((a) => (
+            <Link
+              key={a.href}
+              href={a.href}
+              onClick={() => setAcciones(false)}
+              className="flex flex-col items-start gap-3 rounded-2xl border border-borde p-4 hover:bg-fondo"
+            >
+              <span className={cn("flex size-10 items-center justify-center rounded-xl", a.tono)}>
+                <a.icono className="size-5" />
+              </span>
+              <span className="text-sm font-semibold">{a.etiqueta}</span>
+            </Link>
+          ))}
+        </div>
+      </Hoja>
     </div>
   );
 }
+
+const ACCIONES = [
+  { href: "/ruta", etiqueta: "Cobrar", icono: HandCoins, tono: "bg-acento-suave text-acento-oscuro" },
+  { href: "/prestamos/nuevo", etiqueta: "Nuevo préstamo", icono: Banknote, tono: "bg-primario-suave text-primario" },
+  { href: "/clientes/nuevo", etiqueta: "Nuevo cliente", icono: UserPlus, tono: "bg-primario-suave text-primario" },
+  { href: "/caja?gasto=1", etiqueta: "Registrar gasto", icono: Receipt, tono: "bg-alerta-suave text-alerta" },
+];
 
 /** 4 accesos + botón central de acción en el medio. */
 function menuMovil(menu, conAccion) {

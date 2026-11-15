@@ -3,6 +3,10 @@ import pg from "pg";
 
 // BIGINT (int8) → Number. Los montos en pesos caben de sobra en Number.MAX_SAFE_INTEGER.
 pg.types.setTypeParser(20, (v) => (v === null ? null : Number(v)));
+// DATE → texto "YYYY-MM-DD" (sin convertir a Date, para no correr el día por la zona horaria)
+pg.types.setTypeParser(1082, (v) => v);
+// NUMERIC → Number (tasas y recargos con decimales pequeños)
+pg.types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));
 
 function sslConfig() {
   const modo = (process.env.DATABASE_SSL || "disable").toLowerCase();

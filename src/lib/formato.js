@@ -22,7 +22,12 @@ const fechaCorta = new Intl.DateTimeFormat("es-CO", {
   year: "numeric",
   timeZone: "America/Bogota",
 });
-export const fecha = (d) => (d ? fechaCorta.format(new Date(d)) : "—");
+/** Fecha corta. Las fechas de negocio "YYYY-MM-DD" se leen al mediodía UTC para que no se corran de día en Colombia. */
+export const fecha = (d) => {
+  if (!d) return "—";
+  const esSoloFecha = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  return fechaCorta.format(esSoloFecha ? new Date(`${d}T12:00:00Z`) : new Date(d));
+};
 
 /** "María García" → "MG" */
 export const iniciales = (nombre = "") =>

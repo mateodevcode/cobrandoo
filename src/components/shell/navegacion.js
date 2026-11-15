@@ -1,4 +1,5 @@
 // Menú por rol. `pronto: true` = módulo de una fase siguiente (se muestra deshabilitado).
+// `movil: false` = solo en la barra lateral de escritorio (la barra inferior tiene 4 espacios).
 import {
   Building2,
   Home,
@@ -7,9 +8,9 @@ import {
   Wallet,
   ClipboardCheck,
   BarChart3,
-  Settings,
   UsersRound,
   HandCoins,
+  BookOpen,
 } from "lucide-react";
 
 export function menuPara(rol) {
@@ -19,19 +20,23 @@ export function menuPara(rol) {
   if (rol === "cobrador") {
     return [
       { href: "/inicio", etiqueta: "Inicio", icono: Home },
-      { href: "/ruta", etiqueta: "Ruta", icono: Route, pronto: true },
-      { href: "/clientes", etiqueta: "Clientes", icono: Users, pronto: true },
-      { href: "/caja", etiqueta: "Caja", icono: Wallet, pronto: true },
+      { href: "/ruta", etiqueta: "Ruta", icono: Route },
+      { href: "/clientes", etiqueta: "Clientes", icono: Users },
+      { href: "/caja", etiqueta: "Caja", icono: Wallet },
+      { href: "/prestamos", etiqueta: "Préstamos", icono: HandCoins, movil: false },
+      { href: "/metodos", etiqueta: "Métodos", icono: BookOpen, movil: false },
     ];
   }
   // dueño y supervisor
   return [
     { href: "/inicio", etiqueta: "Inicio", icono: Home },
-    { href: "/prestamos", etiqueta: "Préstamos", icono: HandCoins, pronto: true },
-    { href: "/clientes", etiqueta: "Clientes", icono: Users, pronto: true },
-    { href: "/equipo", etiqueta: "Equipo", icono: UsersRound, pronto: true },
-    { href: "/cuadres", etiqueta: "Cuadres", icono: ClipboardCheck, pronto: true },
-    { href: "/reportes", etiqueta: "Reportes", icono: BarChart3, pronto: true },
-    { href: "/ajustes", etiqueta: "Ajustes", icono: Settings, pronto: true },
+    { href: "/prestamos", etiqueta: "Préstamos", icono: HandCoins },
+    { href: "/clientes", etiqueta: "Clientes", icono: Users },
+    { href: "/equipo", etiqueta: "Equipo", icono: UsersRound },
+    { href: "/ruta", etiqueta: "Rutas", icono: Route, movil: false },
+    { href: "/caja", etiqueta: "Mi caja", icono: Wallet, movil: false },
+    { href: "/cuadres", etiqueta: "Cuadres", icono: ClipboardCheck, pronto: true, movil: false },
+    { href: "/reportes", etiqueta: "Reportes", icono: BarChart3, pronto: true, movil: false },
+    { href: "/metodos", etiqueta: "Métodos", icono: BookOpen, movil: false },
   ];
 }
