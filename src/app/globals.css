@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* ===== Tokens de diseño Cobrandoo ===== */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --color-fondo: #f4f6fb;
+  --color-superficie: #ffffff;
+  --color-borde: #e6e9f0;
+  --color-texto: #0f1b2d;
+  --color-suave: #64708a;
+
+  --color-marino-900: #0b1b33;
+  --color-marino-800: #10264a;
+  --color-marino-700: #17325f;
+
+  --color-primario: #2563eb;
+  --color-primario-oscuro: #1d4ed8;
+  --color-primario-suave: #e8efff;
+
+  --color-acento: #14b8a6;
+  --color-acento-oscuro: #0f766e;
+  --color-acento-suave: #ddf7f3;
+
+  --color-exito: #15803d;
+  --color-exito-suave: #dcfce7;
+  --color-alerta: #b45309;
+  --color-alerta-suave: #fef3c7;
+  --color-peligro: #b91c1c;
+  --color-peligro-suave: #fee2e2;
+
+  --radius-tarjeta: 1rem;
+  --shadow-tarjeta: 0 1px 2px rgb(15 27 45 / 0.04), 0 4px 16px rgb(15 27 45 / 0.04);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-fondo);
+  color: var(--color-texto);
+}
+
+/* Números tabulares para montos */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+  .tarjeta {
+    @apply rounded-tarjeta border border-borde bg-superficie shadow-tarjeta;
+  }
+}
