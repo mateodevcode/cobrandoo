@@ -10,6 +10,7 @@ import { Insignia } from "@/components/ui/Insignia";
 import { BotonCobrar } from "@/components/negocio/BotonCobrar";
 import { dinero } from "@/lib/formato";
 import { api } from "@/lib/api";
+import { sincronizador } from "@/lib/offline/sync";
 import { cn } from "@/lib/cn";
 
 const FILTROS = [
@@ -67,12 +68,16 @@ export function ListaRuta({ clientes, puedeOrdenar }) {
         if (!porRuta.has(k)) porRuta.set(k, []);
         porRuta.get(k).push(c.cliente_id);
       }
-      for (const [ruta_id, ids] of porRuta) await api("/api/rutas/orden", { method: "POST", body: { ruta_id, clientes: ids } });
+      // Ordenar necesita conexión (cambia datos de varios clientes a la vez)
+      for (const [ruta_id, ids] of porRuta) {
+        await api("/api/rutas/orden", { method: "POST", body: { ruta_id, clientes: ids.filter((id) => !orden.find((c) => c.cliente_id === id)?.pendiente) } });
+      }
+      await sincronizador.sincronizar();
       toast.success("Orden guardado");
       setOrdenando(false);
       router.refresh();
     } catch (err) {
-      toast.error(err.message);
+      toast.error(navigator.onLine ? err.message : "Necesitas internet para cambiar el orden de la ruta");
     } finally {
       setGuardando(false);
     }
@@ -144,11 +149,22 @@ export function ListaRuta({ clientes, puedeOrdenar }) {
                 ) : (
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-fondo text-xs font-bold text-suave">{i + 1}</span>
                 )}
-                <Link href={`/clientes/${c.cliente_id}`} className="min-w-0 flex-1">
+                <Link
+                  href={`/clientes/${c.cliente_id}`}
+                  onClick={(e) => {
+                    // La ficha del cliente necesita internet; sin señal se cobra desde aquí mismo
+                    if (!navigator.onLine) {
+                      e.preventDefault();
+                      toast.info("La ficha del cliente necesita internet. Puedes cobrar con el botón de la derecha.");
+                    }
+                  }}
+                  className="min-w-0 flex-1"
+                >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <p className="truncate font-semibold">{c.nombre}</p>
                     {c.dias_atraso > 0 && <Insignia tono="peligro">{c.dias_atraso} d</Insignia>}
                     {c.pagado_hoy > 0 && <Insignia tono="exito">Pagó {dinero(c.pagado_hoy)}</Insignia>}
+                    {c.pendiente && <Insignia tono="alerta">Sin enviar</Insignia>}
                   </div>
                   {(c.direccion || c.barrio) && (
                     <p className="flex items-center gap-1 truncate text-xs text-suave">
@@ -165,7 +181,7 @@ export function ListaRuta({ clientes, puedeOrdenar }) {
                     )}
                   </p>
                 </Link>
-                {!ordenando && <BotonCobrar cliente={c.nombre} prestamos={c.prestamos} tamano="sm" />}
+                {!ordenando && <BotonCobrar clienteId={c.cliente_id} cliente={c.nombre} prestamos={c.prestamos} tamano="sm" />}
               </li>
             ))}
           </ul>

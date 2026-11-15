@@ -14,6 +14,14 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // El service worker siempre se revisa al abrir la app (para recibir actualizaciones)
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },

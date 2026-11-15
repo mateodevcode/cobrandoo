@@ -1,45 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Boton } from "@/components/ui/Boton";
 import { Campo } from "@/components/ui/Campo";
 import { api } from "@/lib/api";
+import { sincronizador } from "@/lib/offline/sync";
+import { useSync } from "@/lib/offline/hooks";
 
 /**
- * Crear o editar cliente.
- * @param cobradores  [{id, nombre}] que puede elegir (1 si es cobrador)
+ * Crear (funciona sin señal) o editar (necesita internet) un cliente.
+ * @param usuarioId   usuario de la sesión (si es cobrador, es su propio cobrador)
+ * @param cobradores  [{id, nombre}] que puede elegir un jefe
  * @param cliente     datos actuales (edición) o undefined (nuevo)
  */
-export function FormCliente({ cobradores, cliente, esJefe }) {
+export function FormCliente({ usuarioId, cobradores, cliente, esJefe }) {
   const router = useRouter();
+  const { datos } = useSync();
   const editando = !!cliente;
-  const [cobradorId, setCobradorId] = useState(cliente?.cobrador_id ?? (cobradores.length === 1 ? cobradores[0].id : ""));
-  const [rutas, setRutas] = useState([]);
+  const [cobradorId, setCobradorId] = useState(cliente?.cobrador_id ?? (esJefe ? (cobradores.length === 1 ? cobradores[0].id : "") : usuarioId));
+  const [rutasNuevas, setRutasNuevas] = useState([]);
+  const rutas = [...(datos?.rutas ?? []), ...rutasNuevas].filter((r) => r.cobrador_id === cobradorId);
   const [rutaId, setRutaId] = useState(cliente?.ruta_id ?? "");
   const [errores, setErrores] = useState({});
   const [enviando, setEnviando] = useState(false);
 
-  useEffect(() => {
-    if (!cobradorId) return;
-    let vivo = true;
-    api(`/api/rutas?cobrador=${cobradorId}`)
-      .then((d) => vivo && setRutas(d.rutas))
-      .catch(() => vivo && setRutas([]));
-    return () => {
-      vivo = false;
-    };
-  }, [cobradorId]);
-
   async function nuevaRuta() {
+    if (!navigator.onLine) return toast.error("Necesitas internet para crear una ruta nueva");
     const nombre = window.prompt("Nombre de la nueva ruta (ej: Centro, Barrio Norte)");
     if (!nombre?.trim()) return;
     try {
       const { ruta } = await api("/api/rutas", { method: "POST", body: { nombre, cobrador_id: cobradorId } });
-      setRutas((r) => [...r, ruta]);
+      setRutasNuevas((r) => [...r, ruta]);
       setRutaId(ruta.id);
+      sincronizador.sincronizar();
       toast.success(`Ruta "${ruta.nombre}" creada`);
     } catch (err) {
       toast.error(err.message);
@@ -48,27 +44,52 @@ export function FormCliente({ cobradores, cliente, esJefe }) {
 
   async function enviar(e) {
     e.preventDefault();
-    setEnviando(true);
     setErrores({});
     const f = Object.fromEntries(new FormData(e.currentTarget));
-    const datos = { ...f, ruta_id: rutaId || null };
-    if (esJefe) datos.cobrador_id = cobradorId || undefined;
-    else delete datos.cobrador_id;
-    try {
-      if (editando) {
-        await api(`/api/clientes/${cliente.id}`, { method: "PATCH", body: datos });
+    if (!f.nombre?.trim() || f.nombre.trim().length < 2) return setErrores({ nombre: "Escribe el nombre" });
+    if (esJefe && !cobradorId) return setErrores({ cobrador_id: "Elige el cobrador" });
+    const datosForm = { ...f, ruta_id: rutaId || null, ...(esJefe ? { cobrador_id: cobradorId } : {}) };
+    setEnviando(true);
+
+    if (editando) {
+      try {
+        await api(`/api/clientes/${cliente.id}`, { method: "PATCH", body: datosForm });
         toast.success("Cliente actualizado");
         router.push(`/clientes/${cliente.id}`);
-      } else {
-        const { cliente: nuevo } = await api("/api/clientes", { method: "POST", body: { ...datos, id: crypto.randomUUID() } });
-        toast.success("Cliente creado");
-        router.push(`/clientes/${nuevo.id}`);
+        router.refresh();
+      } catch (err) {
+        mostrarError(err.campos, err.message);
       }
-      router.refresh();
-    } catch (err) {
-      setErrores({ ...Object.fromEntries((err.campos ?? []).map((c) => [c.campo, c.mensaje])), general: err.campos ? "" : err.message });
-      setEnviando(false);
+      return;
     }
+
+    // Nuevo: se guarda en el teléfono y se envía; con señal esperamos la respuesta para mostrar errores aquí
+    const id = crypto.randomUUID();
+    const r = await sincronizador.encolarYEsperar({
+      id,
+      tipo: "cliente",
+      url: "/api/clientes",
+      body: { ...datosForm, id },
+      local: { cobrador_id: cobradorId },
+      descripcion: `Nuevo cliente: ${f.nombre}`,
+    }, 8000);
+
+    if (r.error) {
+      await sincronizador.descartar(id);
+      return mostrarError(null, r.error);
+    }
+    if (r.enviado) {
+      toast.success("Cliente creado");
+      router.push(`/clientes/${id}`);
+    } else {
+      toast.success("Cliente guardado en el teléfono", { description: "Se enviará solo cuando haya señal. Ya puedes hacerle el préstamo." });
+      router.push(`/prestamos/nuevo?cliente=${id}`);
+    }
+  }
+
+  function mostrarError(campos, mensaje) {
+    setErrores({ ...Object.fromEntries((campos ?? []).map((c) => [c.campo, c.mensaje])), general: campos ? "" : mensaje });
+    setEnviando(false);
   }
 
   return (

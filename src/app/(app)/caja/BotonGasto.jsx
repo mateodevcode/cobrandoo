@@ -11,7 +11,7 @@ import { Chips } from "@/components/ui/Chips";
 import { Hoja } from "@/components/ui/Hoja";
 import { CATEGORIAS_GASTO, METODOS_PAGO } from "@/lib/prestamos/constantes";
 import { dinero } from "@/lib/formato";
-import { api } from "@/lib/api";
+import { sincronizador } from "@/lib/offline/sync";
 
 export function BotonGasto() {
   const router = useRouter();
@@ -30,7 +30,6 @@ export function BotonGasto() {
   const [descripcion, setDescripcion] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
-  const [id, setId] = useState(() => crypto.randomUUID());
 
   async function enviar(e) {
     e.preventDefault();
@@ -38,16 +37,21 @@ export function BotonGasto() {
     setEnviando(true);
     setError("");
     try {
-      await api("/api/caja/gastos", { method: "POST", body: { id, monto, categoria, metodo, descripcion } });
-      toast.success(`Gasto de ${dinero(monto)} registrado`);
+      const id = crypto.randomUUID();
+      await sincronizador.encolar({
+        id,
+        tipo: "gasto",
+        url: "/api/caja/gastos",
+        body: { id, monto, categoria, metodo, descripcion, creado_en_dispositivo: new Date().toISOString() },
+        local: {},
+        descripcion: `Gasto de ${dinero(monto)}`,
+      });
+      toast.success(`Gasto de ${dinero(monto)} guardado`, { description: navigator.onLine ? undefined : "Sin señal: se enviará solo cuando vuelva." });
       setAbierta(false);
       setMonto(0);
       setDescripcion("");
-      setId(crypto.randomUUID());
-      router.replace("/caja");
-      router.refresh();
     } catch (err) {
-      setError(err.campos?.[0]?.mensaje || err.message);
+      setError(err.message);
     } finally {
       setEnviando(false);
     }

@@ -2,7 +2,7 @@ import "server-only";
 import { query, transaccion } from "../db";
 import { ErrorApp } from "../http";
 import { exigirVisible, filtroVisible } from "../permisos";
-import { hoyBogota } from "@/lib/fechas";
+import { hoyBogota, sumarDias } from "@/lib/fechas";
 import * as auditoria from "../repos/auditoria.repo";
 
 /** Jornada (caja del día) de un usuario; la crea si no existe. */
@@ -16,11 +16,29 @@ export async function obtenerJornada(db, { organizacionId, usuarioId, fecha = ho
   return rows[0];
 }
 
-/** Inserta un movimiento en la caja de `usuarioId` (hoy). Devuelve el id. */
+/** Días hacia atrás que se aceptan para operaciones hechas sin señal. */
+export const MAX_DIAS_OFFLINE = 7;
+
+/**
+ * Fecha de negocio de una operación: la del teléfono cuando se hizo (modo sin internet),
+ * nunca futura y como máximo MAX_DIAS_OFFLINE atrás.
+ */
+export function fechaDeOperacion(creadoEnDispositivo) {
+  const hoy = hoyBogota();
+  if (!creadoEnDispositivo) return hoy;
+  const f = hoyBogota(new Date(creadoEnDispositivo));
+  if (f >= hoy) return hoy;
+  if (f < sumarDias(hoy, -MAX_DIAS_OFFLINE)) {
+    throw new ErrorApp(409, `Esta operación se hizo hace más de ${MAX_DIAS_OFFLINE} días sin conexión. Regístrala con tu jefe.`, "operacion_antigua");
+  }
+  return f;
+}
+
+/** Inserta un movimiento en la caja de `usuarioId` (del día `m.fecha`, o hoy). Devuelve el id. */
 export async function registrarMovimiento(db, m) {
   const jornada = m.jornadaId
     ? { id: m.jornadaId }
-    : await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId });
+    : await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId, fecha: m.fecha });
   const { rows } = await db.query(
     `INSERT INTO movimientos_caja (id, organizacion_id, usuario_id, jornada_id, tipo, metodo, monto, categoria,
                                    descripcion, ref_tipo, ref_id, contraparte_id, creado_por, creado_en_dispositivo)
@@ -38,10 +56,12 @@ export async function registrarMovimiento(db, m) {
 
 export async function registrarGasto(yo, d, ip) {
   if (d.monto <= 0) throw new ErrorApp(400, "Monto inválido", "monto");
+  const fecha = fechaDeOperacion(d.creado_en_dispositivo);
   return transaccion(async (db) => {
     const r = await registrarMovimiento(db, {
-      id: d.id, organizacionId: yo.org, usuarioId: yo.id, tipo: "gasto", metodo: d.metodo,
+      id: d.id, organizacionId: yo.org, usuarioId: yo.id, tipo: "gasto", metodo: d.metodo, fecha,
       monto: -d.monto, categoria: d.categoria, descripcion: d.descripcion, creadoPor: yo.id,
+      creadoEnDispositivo: d.creado_en_dispositivo,
     });
     if (!r.duplicado) {
       await auditoria.registrar(db, { organizacionId: yo.org, usuarioId: yo.id, accion: "caja.gasto", entidad: "movimiento", entidadId: r.id, datos: { monto: d.monto, categoria: d.categoria }, ip });
@@ -58,10 +78,12 @@ export async function entregarBase(yo, d, ip) {
   const cob = rows[0];
   if (!cob) throw new ErrorApp(404, "Cobrador no encontrado", "no_encontrado");
   await exigirVisible(yo, cob.id, cob.organizacion_id);
+  const fecha = fechaDeOperacion(d.creado_en_dispositivo);
 
   return transaccion(async (db) => {
     const r = await registrarMovimiento(db, {
-      id: d.id, organizacionId: yo.org, usuarioId: cob.id, tipo: "base", metodo: d.metodo, monto: d.monto,
+      id: d.id, organizacionId: yo.org, usuarioId: cob.id, tipo: "base", metodo: d.metodo, monto: d.monto, fecha,
+      creadoEnDispositivo: d.creado_en_dispositivo,
       descripcion: d.descripcion ?? `Base entregada por ${yo.nombre}`, contraparteId: yo.id, creadoPor: yo.id,
     });
     if (!r.duplicado) {

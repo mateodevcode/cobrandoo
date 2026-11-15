@@ -6,7 +6,7 @@ import { idsVisibles } from "../jerarquia";
 import { hoyBogota, diasEntre } from "@/lib/fechas";
 import { METODOS } from "@/lib/prestamos/metodos";
 import { simular } from "@/lib/prestamos/motor";
-import { registrarMovimiento } from "./caja.service";
+import { registrarMovimiento, fechaDeOperacion } from "./caja.service";
 import * as auditoria from "../repos/auditoria.repo";
 
 const VERSION_MOTOR = 1;
@@ -101,8 +101,9 @@ export async function ponerAlDia(yo) {
 
 export async function crear(yo, d, ip) {
   const hoy = hoyBogota();
-  const fechaInicio = d.fecha_inicio ?? hoy;
-  if (fechaInicio > hoy) throw new ErrorApp(400, "La fecha de inicio no puede ser futura", "fecha_invalida");
+  // Préstamo hecho sin señal: cuenta desde el día en que se hizo en el teléfono
+  const fechaInicio = d.fecha_inicio ? (d.fecha_inicio > hoy ? hoy : d.fecha_inicio) : fechaDeOperacion(d.creado_en_dispositivo);
+  if (d.registrar_desembolso) fechaDeOperacion(d.creado_en_dispositivo); // valida que no sea demasiado antigua
   if (diasEntre(fechaInicio, hoy) > 730) throw new ErrorApp(400, "La fecha de inicio es demasiado antigua", "fecha_invalida");
 
   return transaccion(async (db) => {
@@ -118,7 +119,7 @@ export async function crear(yo, d, ip) {
 
     const terminos = { ...d, fecha_inicio: fechaInicio };
     const plan = METODOS[d.metodo].generar(terminos);
-    const parametros = { version: VERSION_MOTOR, ...terminos, id: undefined, notas: undefined };
+    const parametros = { version: VERSION_MOTOR, ...terminos, id: undefined, notas: undefined, creado_en_dispositivo: undefined };
 
     const { rows } = await db.query(
       `INSERT INTO prestamos (id, organizacion_id, cliente_id, cobrador_id, metodo, parametros, capital, tasa, base_interes,
@@ -145,7 +146,9 @@ export async function crear(yo, d, ip) {
     if (d.registrar_desembolso) {
       await registrarMovimiento(db, {
         organizacionId: yo.org, usuarioId: yo.id, tipo: "desembolso", metodo: d.metodo_desembolso, monto: -d.capital,
+        fecha: fechaDeOperacion(d.creado_en_dispositivo),
         descripcion: `Préstamo a ${cliente.nombre}`, refTipo: "prestamo", refId: id, creadoPor: yo.id,
+        creadoEnDispositivo: d.creado_en_dispositivo,
       });
     }
 

@@ -65,7 +65,7 @@ export default async function PaginaCliente({ params }) {
               </a>
             </>
           )}
-          {activos.length > 0 && <BotonCobrar cliente={cliente.nombre} prestamos={activos} tamano="sm" />}
+          {activos.length > 0 && <BotonCobrar clienteId={cliente.id} cliente={cliente.nombre} prestamos={activos} tamano="sm" />}
         </div>
 
         {cliente.notas && <p className="mt-4 rounded-xl bg-fondo p-3 text-sm text-suave">{cliente.notas}</p>}

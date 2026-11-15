@@ -13,7 +13,7 @@ import { LISTA_METODOS, METODOS, interesDe } from "@/lib/prestamos/metodos";
 import { BASES_INTERES, FRECUENCIAS, METODOS_PAGO, RECARGOS, TASA_POR_DEFECTO, DIAS_PERIODO } from "@/lib/prestamos/constantes";
 import { diasEntre } from "@/lib/fechas";
 import { dinero, fecha } from "@/lib/formato";
-import { api } from "@/lib/api";
+import { sincronizador } from "@/lib/offline/sync";
 import { cn } from "@/lib/cn";
 
 const MIN_CAPITAL = 10_000;
@@ -62,10 +62,14 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
     if (!cliente) return toast.error("Elige el cliente");
     setEnviando(true);
     setErrores({});
-    try {
-      const { prestamo } = await api("/api/prestamos", {
-        method: "POST",
-        body: {
+    // Se guarda en el teléfono y se envía; con señal esperamos la respuesta para mostrar errores aquí
+    const r = await sincronizador.encolarYEsperar({
+      id: idPrestamo,
+      tipo: "prestamo",
+      url: "/api/prestamos",
+      local: { cobrador_id: cliente.cobrador_id },
+      descripcion: `Préstamo de ${dinero(capital)} a ${cliente.nombre}`,
+      body: {
           id: idPrestamo,
           cliente_id: cliente.id,
           metodo,
@@ -80,16 +84,23 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
           fecha_inicio: inicio,
           registrar_desembolso: !existente,
           notas,
+          creado_en_dispositivo: new Date().toISOString(),
         },
-      });
-      toast.success("Préstamo creado");
-      router.push(`/prestamos/${prestamo.id}`);
-      router.refresh();
-    } catch (err) {
-      const campos = Object.fromEntries((err.campos ?? []).map((c) => [c.campo, c.mensaje]));
-      setErrores(campos);
-      toast.error(err.campos ? "Revisa los campos marcados" : err.message);
+    }, 8000);
+
+    if (r.error) {
+      await sincronizador.descartar(idPrestamo);
+      toast.error(r.error);
       setEnviando(false);
+      return;
+    }
+    if (r.enviado) {
+      toast.success("Préstamo creado");
+      router.push(`/prestamos/${idPrestamo}`);
+      router.refresh();
+    } else {
+      toast.success("Préstamo guardado en el teléfono", { description: "Se enviará solo cuando haya señal. Ya aparece en tu ruta." });
+      router.push("/ruta");
     }
   }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Boton } from "@/components/ui/Boton";
 import { CampoDinero } from "@/components/ui/CampoDinero";
@@ -9,16 +8,14 @@ import { Chips } from "@/components/ui/Chips";
 import { Hoja } from "@/components/ui/Hoja";
 import { METODOS_PAGO } from "@/lib/prestamos/constantes";
 import { dinero } from "@/lib/formato";
-import { api } from "@/lib/api";
+import { sincronizador } from "@/lib/offline/sync";
 
 export function BotonBase({ cobrador }) {
-  const router = useRouter();
   const [abierta, setAbierta] = useState(false);
   const [monto, setMonto] = useState(0);
   const [metodo, setMetodo] = useState("efectivo");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
-  const [id, setId] = useState(() => crypto.randomUUID());
 
   async function enviar(e) {
     e.preventDefault();
@@ -26,14 +23,24 @@ export function BotonBase({ cobrador }) {
     setEnviando(true);
     setError("");
     try {
-      await api("/api/caja/base", { method: "POST", body: { id, cobrador_id: cobrador.id, monto, metodo } });
-      toast.success(`Base de ${dinero(monto)} entregada a ${cobrador.nombre}`);
+      const id = crypto.randomUUID();
+      const r = await sincronizador.encolarYEsperar({
+        id,
+        tipo: "base",
+        url: "/api/caja/base",
+        body: { id, cobrador_id: cobrador.id, monto, metodo, creado_en_dispositivo: new Date().toISOString() },
+        local: {},
+        descripcion: `Base de ${dinero(monto)} para ${cobrador.nombre}`,
+      }, 6000);
+      if (r.error) {
+        await sincronizador.descartar(id);
+        return setError(r.error);
+      }
+      toast.success(`Base de ${dinero(monto)} entregada a ${cobrador.nombre}`, { description: r.enviado ? undefined : "Sin señal: se enviará sola cuando vuelva." });
       setAbierta(false);
       setMonto(0);
-      setId(crypto.randomUUID());
-      router.refresh();
     } catch (err) {
-      setError(err.campos?.[0]?.mensaje || err.message);
+      setError(err.message);
     } finally {
       setEnviando(false);
     }

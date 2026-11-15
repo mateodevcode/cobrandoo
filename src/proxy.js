@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { verificarAcceso, COOKIE_ACCESS } from "@/server/auth/tokens";
 
-const PUBLICAS = ["/login", "/c/"]; // /c/{token} = historial público del cliente (fase 5)
+const PUBLICAS = ["/login", "/offline", "/c/"]; // /c/{token} = historial público del cliente (fase 5)
 
 export async function proxy(req) {
   const { pathname, search } = req.nextUrl;
@@ -36,5 +36,5 @@ function destinoPorRol(rol) {
 
 export const config = {
   // Excluye API, estáticos e íconos/manifest de la PWA
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest|sw.js|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)$).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest|sw.js|offline|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)$).*)"],
 };

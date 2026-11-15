@@ -5,7 +5,7 @@ import { exigirVisible } from "../permisos";
 import { hoyBogota } from "@/lib/fechas";
 import { dinero } from "@/lib/formato";
 import { recalcular } from "./prestamos.service";
-import { obtenerJornada, registrarMovimiento } from "./caja.service";
+import { obtenerJornada, registrarMovimiento, fechaDeOperacion } from "./caja.service";
 import * as auditoria from "../repos/auditoria.repo";
 
 /**
@@ -33,11 +33,14 @@ export async function registrar(yo, d, ip) {
       throw new ErrorApp(400, `El pago supera lo que debe (${dinero(p.saldo)})`, "pago_mayor_saldo");
     }
 
-    const jornada = await obtenerJornada(db, { organizacionId: yo.org, usuarioId: yo.id, fecha: hoy });
+    // Si se cobró sin señal, el pago queda en el día en que realmente se hizo
+    let fecha = fechaDeOperacion(d.creado_en_dispositivo);
+    if (fecha < p.fecha_inicio) fecha = p.fecha_inicio;
+    const jornada = await obtenerJornada(db, { organizacionId: yo.org, usuarioId: yo.id, fecha });
     await db.query(
       `INSERT INTO pagos (id, organizacion_id, prestamo_id, cliente_id, cobrador_id, jornada_id, monto, metodo, fecha, nota, creado_en_dispositivo)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [d.id, p.organizacion_id, p.id, p.cliente_id, yo.id, jornada.id, d.monto, d.metodo, hoy, d.nota, d.creado_en_dispositivo ?? null]
+      [d.id, p.organizacion_id, p.id, p.cliente_id, yo.id, jornada.id, d.monto, d.metodo, fecha, d.nota, d.creado_en_dispositivo ?? null]
     );
     await registrarMovimiento(db, {
       organizacionId: p.organizacion_id, usuarioId: yo.id, jornadaId: jornada.id, tipo: "cobro", metodo: d.metodo,

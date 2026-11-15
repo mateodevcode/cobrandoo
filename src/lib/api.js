@@ -22,16 +22,22 @@ export function refrescarSesion() {
   return refrescando;
 }
 
-export async function api(url, { method = "GET", body, reintento = true } = {}) {
+/**
+ * @param {object} op
+ * @param {boolean} op.redirigir  si la sesión murió, ir al login (false en la sincronización de fondo)
+ */
+export async function api(url, { method = "GET", body, reintento = true, redirigir = true, signal } = {}) {
   const res = await fetch(url, {
     method,
     credentials: "same-origin",
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
 
   if (res.status === 401 && reintento && !url.startsWith("/api/auth/")) {
-    if (await refrescarSesion()) return api(url, { method, body, reintento: false });
+    if (await refrescarSesion()) return api(url, { method, body, reintento: false, redirigir, signal });
+    if (!redirigir) throw new ErrorApi(401, { mensaje: "Sesión expirada", codigo: "no_autenticado" });
     // Recarga completa a propósito: limpia el estado en memoria de una sesión muerta.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href =`/login?next=${encodeURIComponent(location.pathname)}`;

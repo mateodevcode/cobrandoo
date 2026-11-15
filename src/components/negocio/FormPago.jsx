@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Boton } from "@/components/ui/Boton";
 import { CampoDinero } from "@/components/ui/CampoDinero";
@@ -10,15 +9,14 @@ import { Campo } from "@/components/ui/Campo";
 import { METODOS_PAGO } from "@/lib/prestamos/constantes";
 import { METODOS } from "@/lib/prestamos/metodos";
 import { dinero } from "@/lib/formato";
-import { api } from "@/lib/api";
+import { sincronizador } from "@/lib/offline/sync";
 import { cn } from "@/lib/cn";
 
 /**
- * Registrar un abono. `prestamos`: [{ id, metodo, saldo, sugerido_hoy, valor_cuota }]
- * Si el cliente tiene varios préstamos activos, primero se elige cuál.
+ * Registrar un abono. Se guarda primero en el teléfono (funciona sin señal) y se envía solo.
+ * `prestamos`: [{ id, metodo, saldo, sugerido_hoy, valor_cuota }]
  */
-export function FormPago({ prestamos, onListo }) {
-  const router = useRouter();
+export function FormPago({ clienteId, clienteNombre, prestamos, onListo }) {
   const [prestamoId, setPrestamoId] = useState(prestamos[0]?.id);
   const p = prestamos.find((x) => x.id === prestamoId) ?? prestamos[0];
   const [monto, setMonto] = useState(sugerencia(prestamos[0]));
@@ -26,8 +24,6 @@ export function FormPago({ prestamos, onListo }) {
   const [nota, setNota] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
-  // Mismo id en reintentos: si la red falla y se vuelve a enviar, el servidor no lo duplica
-  const [idPago, setIdPago] = useState(() => crypto.randomUUID());
 
   const atajos = [
     p.sugerido_hoy > 0 && { etiqueta: "Al día", valor: p.sugerido_hoy },
@@ -42,18 +38,26 @@ export function FormPago({ prestamos, onListo }) {
     setError("");
     setEnviando(true);
     try {
-      const { pago } = await api("/api/pagos", {
-        method: "POST",
-        body: { id: idPago, prestamo_id: p.id, monto, metodo, nota, creado_en_dispositivo: new Date().toISOString() },
+      // El id se crea aquí: si se reintenta el envío, el servidor no lo duplica
+      const id = crypto.randomUUID();
+      await sincronizador.encolar({
+        id,
+        tipo: "pago",
+        url: "/api/pagos",
+        body: { id, prestamo_id: p.id, monto, metodo, nota, creado_en_dispositivo: new Date().toISOString() },
+        local: { cliente_id: clienteId },
+        descripcion: `Cobro de ${dinero(monto)} a ${clienteNombre}`,
       });
-      toast.success(`Cobro de ${dinero(pago.monto)} registrado`, {
-        description: pago.prestamo_estado === "pagado" ? "¡Préstamo pagado por completo!" : `Queda debiendo ${dinero(pago.saldo)}`,
+      const resta = p.saldo - monto;
+      toast.success(`Cobro de ${dinero(monto)} guardado`, {
+        description: [
+          resta <= 0 ? "¡Préstamo pagado por completo!" : `Queda debiendo ${dinero(resta)}`,
+          !navigator.onLine && "Sin señal: se enviará solo cuando vuelva.",
+        ].filter(Boolean).join(" "),
       });
-      setIdPago(crypto.randomUUID());
-      router.refresh();
-      onListo?.(pago);
+      onListo?.();
     } catch (err) {
-      setError(err.campos?.[0]?.mensaje || err.message);
+      setError(err.message);
     } finally {
       setEnviando(false);
     }

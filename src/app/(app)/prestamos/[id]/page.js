@@ -57,7 +57,7 @@ export default async function PaginaPrestamo({ params }) {
             {esJefe && ` · ${p.cobrador_nombre}`}
           </p>
         </div>
-        {p.estado === "activo" && <BotonCobrar cliente={p.cliente_nombre} prestamos={[{ id: p.id, metodo: p.metodo, saldo: p.saldo, sugerido_hoy: p.sugerido_hoy, valor_cuota: p.valor_cuota }]} />}
+        {p.estado === "activo" && <BotonCobrar clienteId={p.cliente_id} cliente={p.cliente_nombre} prestamos={[{ id: p.id, metodo: p.metodo, saldo: p.saldo, sugerido_hoy: p.sugerido_hoy, valor_cuota: p.valor_cuota }]} />}
       </header>
 
       {p.estado === "anulado" && (

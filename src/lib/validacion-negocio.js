@@ -95,6 +95,7 @@ export const prestamoSchema = z
     fecha_inicio: fecha.optional(),
     registrar_desembolso: z.boolean().default(true),
     notas: opcional(500),
+    creado_en_dispositivo: z.iso.datetime({ offset: true }).optional(),
   })
   .superRefine((d, ctx) => {
     if (d.metodo === "cuotas_fijas") {
@@ -135,6 +136,7 @@ export const gastoSchema = z.object({
   categoria: z.enum(IDS_CATEGORIAS_GASTO),
   descripcion: opcional(200),
   metodo: z.enum(IDS_METODOS_PAGO).default("efectivo"),
+  creado_en_dispositivo: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const baseSchema = z.object({
@@ -143,4 +145,5 @@ export const baseSchema = z.object({
   monto: pesos(1_000, 10_000_000_000, "La base"),
   metodo: z.enum(IDS_METODOS_PAGO).default("efectivo"),
   descripcion: opcional(200),
+  creado_en_dispositivo: z.iso.datetime({ offset: true }).optional(),
 });

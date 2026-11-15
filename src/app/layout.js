@@ -8,6 +8,11 @@ export const metadata = {
   title: { default: "Cobrandoo", template: "%s · Cobrandoo" },
   description: "Préstamos y cobros diarios, con o sin internet.",
   applicationName: "Cobrandoo",
+  icons: {
+    icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }],
+    apple: "/icons/apple-touch-icon.png",
+  },
+  appleWebApp: { capable: true, title: "Cobrandoo", statusBarStyle: "black-translucent" },
 };
 
 export const viewport = {

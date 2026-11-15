@@ -6,7 +6,7 @@ import { Boton } from "@/components/ui/Boton";
 import { Hoja } from "@/components/ui/Hoja";
 import { FormPago } from "./FormPago";
 
-export function BotonCobrar({ cliente, prestamos, tamano = "md", className, children }) {
+export function BotonCobrar({ clienteId, cliente, prestamos, tamano = "md", className, children }) {
   const [abierta, setAbierta] = useState(false);
   return (
     <>
@@ -18,7 +18,7 @@ export function BotonCobrar({ cliente, prestamos, tamano = "md", className, chil
         )}
       </Boton>
       <Hoja abierta={abierta} onCerrar={() => setAbierta(false)} titulo={`Cobrar a ${cliente}`}>
-        <FormPago prestamos={prestamos} onListo={() => setAbierta(false)} />
+        <FormPago clienteId={clienteId} clienteNombre={cliente} prestamos={prestamos} onListo={() => setAbierta(false)} />
       </Hoja>
     </>
   );

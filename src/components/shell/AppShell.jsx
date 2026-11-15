@@ -11,6 +11,9 @@ import { NOMBRE_ROL } from "@/lib/roles";
 import { api } from "@/lib/api";
 import { Avatar } from "@/components/ui/Insignia";
 import { menuPara } from "./navegacion";
+import { ProveedorSync, limpiarOffline } from "@/components/offline/ProveedorSync";
+import { EstadoConexion } from "@/components/offline/EstadoConexion";
+import { sincronizador } from "@/lib/offline/sync";
 
 export function AppShell({ usuario, children }) {
   const pathname = usePathname();
@@ -20,9 +23,16 @@ export function AppShell({ usuario, children }) {
   const [acciones, setAcciones] = useState(false);
 
   async function salir() {
+    const pendientes = sincronizador?.obtener().pendientes.length ?? 0;
+    const aviso = pendientes
+      ? `Tienes ${pendientes} operación(es) sin enviar. Se enviarán cuando vuelvas a ingresar en este teléfono. ¿Cerrar sesión?`
+      : "¿Cerrar sesión?";
+    if (!window.confirm(aviso)) return;
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
-    router.replace("/login");
-    router.refresh();
+    await limpiarOffline().catch(() => {});
+    // Recarga completa a propósito: no debe quedar nada de la sesión en memoria
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = "/login";
   }
 
   const activo = (href) => pathname === href || pathname.startsWith(href + "/");
@@ -30,12 +40,14 @@ export function AppShell({ usuario, children }) {
 
   return (
     <div className="min-h-dvh lg:flex">
+      <ProveedorSync usuario={usuario} />
       {/* ===== Barra lateral (escritorio) ===== */}
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-marino-900 p-4 text-white lg:flex">
         <div className="flex items-center gap-2.5 px-2 py-3">
           <span className="size-8 rounded-lg bg-acento" />
           <span className="text-lg font-bold">Cobrandoo</span>
         </div>
+        {conBotonAccion && <EstadoConexion oscuro className="mx-2 w-fit" />}
 
         <nav className="mt-6 flex flex-1 flex-col gap-1" aria-label="Principal">
           {menu.map((item) =>
@@ -85,9 +97,10 @@ export function AppShell({ usuario, children }) {
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-borde bg-superficie/90 px-4 py-3 backdrop-blur lg:hidden">
           <span className="size-7 rounded-lg bg-acento" />
           <span className="font-bold">Cobrandoo</span>
+          {conBotonAccion && <EstadoConexion className="ml-auto" />}
           <button
-            onClick={() => window.confirm("¿Cerrar sesión?") && salir()}
-            className="ml-auto flex items-center gap-2 rounded-full"
+            onClick={salir}
+            className={cn("flex items-center gap-2 rounded-full", !conBotonAccion && "ml-auto")}
             aria-label="Cerrar sesión"
           >
             <Avatar nombre={usuario.nombre} className="size-8" />
