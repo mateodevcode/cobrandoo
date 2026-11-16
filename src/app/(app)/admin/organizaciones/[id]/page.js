@@ -8,6 +8,8 @@ import * as usuariosRepo from "@/server/repos/usuarios.repo";
 import { Insignia } from "@/components/ui/Insignia";
 import { GestionUsuarios } from "./GestionUsuarios";
 import { EstadoOrganizacion } from "./EstadoOrganizacion";
+import { EliminarOrganizacion } from "./EliminarOrganizacion";
+import { query } from "@/server/db";
 
 export const metadata = { title: "Organización" };
 
@@ -16,7 +18,16 @@ export default async function PaginaOrganizacion({ params }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
 
-  const [org, usuarios] = await Promise.all([orgRepo.buscarPorId(id), usuariosRepo.listar({ organizacionId: id })]);
+  const [org, usuarios, { rows: conteo }] = await Promise.all([
+    orgRepo.buscarPorId(id),
+    usuariosRepo.listar({ organizacionId: id }),
+    query(
+      `SELECT (SELECT count(*) FROM usuarios WHERE organizacion_id = $1)::int AS usuarios,
+              (SELECT count(*) FROM clientes WHERE organizacion_id = $1)::int AS clientes,
+              (SELECT count(*) FROM prestamos WHERE organizacion_id = $1)::int AS prestamos`,
+      [id]
+    ),
+  ]);
   if (!org) notFound();
 
   return (
@@ -34,6 +45,7 @@ export default async function PaginaOrganizacion({ params }) {
       </header>
 
       <GestionUsuarios organizacionId={org.id} usuarios={JSON.parse(JSON.stringify(usuarios))} />
+      <EliminarOrganizacion org={{ id: org.id, nombre: org.nombre }} resumen={conteo[0]} />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Campo } from "@/components/ui/Campo";
 import { Avatar, Insignia } from "@/components/ui/Insignia";
 import { JEFES_PERMITIDOS, NOMBRE_ROL, ESTADOS_USUARIO } from "@/lib/roles";
 import { api } from "@/lib/api";
+import { EliminarUsuario } from "./EliminarUsuario";
 
 const GRUPOS = [
   { rol: "dueno", titulo: "Dueños", ayuda: "Ven todo el negocio. Puede haber varios (familiares o socios)." },
@@ -263,13 +264,16 @@ function FormEditar({ usuario, usuarios, onCerrar }) {
           <Wand2 className="size-4" />
         </Boton>
       </div>
-      <div className="flex items-end justify-end gap-2 sm:col-span-2">
-        <Boton type="button" variante="fantasma" onClick={onCerrar}>
-          Cancelar
-        </Boton>
-        <Boton type="submit" cargando={enviando}>
-          Guardar
-        </Boton>
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
+        <EliminarUsuario usuario={usuario} usuarios={usuarios} />
+        <div className="flex gap-2">
+          <Boton type="button" variante="fantasma" onClick={onCerrar}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" cargando={enviando}>
+            Guardar
+          </Boton>
+        </div>
       </div>
     </form>
   );

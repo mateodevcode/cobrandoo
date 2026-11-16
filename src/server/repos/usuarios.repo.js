@@ -40,7 +40,7 @@ export function registrarAcceso(id) {
 
 /** Lista con nombre de organización y jefe. Filtros opcionales. */
 export async function listar({ organizacionId, rol } = {}) {
-  const where = [];
+  const where = ["u.eliminado_en IS NULL"];
   const params = [];
   if (organizacionId) {
     params.push(organizacionId);
@@ -51,11 +51,15 @@ export async function listar({ organizacionId, rol } = {}) {
     where.push(`u.rol = $${params.length}`);
   }
   const { rows } = await query(
-    `SELECT ${COLS}, o.nombre AS organizacion_nombre, j.nombre AS jefe_nombre
+    `SELECT ${COLS}, o.nombre AS organizacion_nombre, j.nombre AS jefe_nombre,
+            (SELECT count(*) FROM usuarios s WHERE s.jefe_id = u.id AND s.eliminado_en IS NULL AND s.estado = 'activo')::int AS a_cargo,
+            (SELECT count(*) FROM clientes c WHERE c.cobrador_id = u.id AND c.estado = 'activo')::int AS clientes_activos,
+            (SELECT count(*) FROM clientes c WHERE c.cobrador_id = u.id)::int AS clientes_total,
+            (SELECT count(*) FROM prestamos p WHERE p.cobrador_id = u.id AND p.estado = 'activo')::int AS prestamos_activos
        FROM usuarios u
        LEFT JOIN organizaciones o ON o.id = u.organizacion_id
        LEFT JOIN usuarios j ON j.id = u.jefe_id
-      ${where.length ? "WHERE " + where.join(" AND ") : ""}
+      WHERE ${where.join(" AND ")}
       ORDER BY o.nombre NULLS FIRST,
                array_position(ARRAY['super_admin','dueno','supervisor','cobrador'], u.rol),
                u.nombre`,
