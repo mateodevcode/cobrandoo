@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Banknote, HandCoins, LogOut, Plus, Receipt, UserPlus } from "lucide-react";
+import { Banknote, HandCoins, LogOut, Menu, Plus, Receipt, UserPlus } from "lucide-react";
 import { Hoja } from "@/components/ui/Hoja";
 import { confirmar } from "@/components/ui/Dialogos";
 import { toast } from "sonner";
@@ -25,6 +25,10 @@ export function AppShell({ usuario, tiempoReal, children }) {
   const menu = menuPara(usuario.rol);
   const conBotonAccion = usuario.rol !== "super_admin";
   const [acciones, setAcciones] = useState(false);
+  const [mas, setMas] = useState(false);
+  // En el celular: lo marcado con `barra` va abajo; TODO lo demás en el panel "Más"
+  const enBarra = menu.filter((m) => m.barra);
+  const enMas = menu.filter((m) => !m.barra);
 
   async function salir() {
     const pendientes = sincronizador?.obtener().pendientes.length ?? 0;
@@ -45,6 +49,7 @@ export function AppShell({ usuario, tiempoReal, children }) {
   }
 
   const activo = (href) => pathname === href || pathname.startsWith(href + "/");
+  const masActivo = enMas.some((m) => activo(m.href));
   const pronto = () => toast.info("Este módulo llega en la siguiente fase.");
 
   return (
@@ -129,7 +134,7 @@ export function AppShell({ usuario, tiempoReal, children }) {
           className="fixed inset-x-0 bottom-0 z-30 border-t border-borde bg-superficie pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
           <ul className="relative grid h-16 grid-cols-5 items-center">
-            {menuMovil(menu.filter((m) => m.movil !== false), conBotonAccion).map((item, i) =>
+            {menuMovil(enBarra, conBotonAccion).map((item, i) =>
               item === "accion" ? (
                 <li key="accion" className="flex justify-center">
                   <button
@@ -138,6 +143,18 @@ export function AppShell({ usuario, tiempoReal, children }) {
                     aria-label="Nuevo cobro o préstamo"
                   >
                     <Plus className="size-6" />
+                  </button>
+                </li>
+              ) : item === "mas" ? (
+                <li key="mas">
+                  <button
+                    onClick={() => setMas(true)}
+                    className={cn("flex w-full flex-col items-center gap-1 text-[11px] font-medium", masActivo ? "text-primario" : "text-suave")}
+                    aria-label="Más opciones"
+                    aria-expanded={mas}
+                  >
+                    <Menu className="size-5" />
+                    Más
                   </button>
                 </li>
               ) : item ? (
@@ -164,6 +181,45 @@ export function AppShell({ usuario, tiempoReal, children }) {
           </ul>
         </nav>
       )}
+
+      {/* Panel "Más" (celular): todas las opciones que no caben en la barra inferior */}
+      <Hoja abierta={mas} onCerrar={() => setMas(false)} titulo="Más opciones">
+        <div className="flex flex-col gap-4">
+          <ul className="grid grid-cols-3 gap-2">
+            {enMas.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={() => setMas(false)}
+                  className={cn(
+                    "flex flex-col items-center gap-2 rounded-2xl border p-3 text-center text-xs font-semibold",
+                    activo(item.href) ? "border-primario bg-primario-suave text-primario" : "border-borde hover:bg-fondo"
+                  )}
+                >
+                  <item.icono className="size-5" />
+                  {item.etiqueta}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center gap-3 rounded-2xl bg-fondo p-3">
+            <Avatar nombre={usuario.nombre} className="size-9" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{usuario.nombre}</p>
+              <p className="text-xs text-suave">{NOMBRE_ROL[usuario.rol]}</p>
+            </div>
+            <button
+              onClick={() => {
+                setMas(false);
+                salir();
+              }}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-peligro hover:bg-peligro-suave"
+            >
+              <LogOut className="size-4" /> Salir
+            </button>
+          </div>
+        </div>
+      </Hoja>
 
       <Hoja abierta={acciones} onCerrar={() => setAcciones(false)} titulo="¿Qué quieres hacer?">
         <div className="grid grid-cols-2 gap-3">
@@ -193,9 +249,9 @@ const ACCIONES = [
   { href: "/caja?gasto=1", etiqueta: "Registrar gasto", icono: Receipt, tono: "bg-alerta-suave text-alerta" },
 ];
 
-/** 4 accesos + botón central de acción en el medio. */
-function menuMovil(menu, conAccion) {
-  const items = menu.slice(0, 4);
-  while (items.length < 4) items.push(null);
-  return conAccion ? [items[0], items[1], "accion", items[2], items[3]] : [items[0], items[1], items[2], items[3], null];
+/** Barra inferior: 3 accesos + botón de acción en el medio + "Más" al final. */
+function menuMovil(barra, conAccion) {
+  const items = barra.slice(0, 3);
+  while (items.length < 3) items.push(null);
+  return conAccion ? [items[0], items[1], "accion", items[2], "mas"] : [items[0], items[1], items[2], null, "mas"];
 }
