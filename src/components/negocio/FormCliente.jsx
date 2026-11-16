@@ -8,6 +8,7 @@ import { Boton } from "@/components/ui/Boton";
 import { Campo } from "@/components/ui/Campo";
 import { api } from "@/lib/api";
 import { sincronizador } from "@/lib/offline/sync";
+import { pedirTexto } from "@/components/ui/Dialogos";
 import { useSync } from "@/lib/offline/hooks";
 
 /**
@@ -29,7 +30,15 @@ export function FormCliente({ usuarioId, cobradores, cliente, esJefe }) {
 
   async function nuevaRuta() {
     if (!navigator.onLine) return toast.error("Necesitas internet para crear una ruta nueva");
-    const nombre = window.prompt("Nombre de la nueva ruta (ej: Centro, Barrio Norte)");
+    const nombre = await pedirTexto({
+      titulo: "Nueva ruta",
+      mensaje: "Agrupa a los clientes por zona para visitarlos en orden.",
+      etiqueta: "Nombre de la ruta",
+      placeholder: "Ej: Centro, Barrio Norte",
+      textoConfirmar: "Crear ruta",
+      minimo: 2,
+      maximo: 60,
+    });
     if (!nombre?.trim()) return;
     try {
       const { ruta } = await api("/api/rutas", { method: "POST", body: { nombre, cobrador_id: cobradorId } });

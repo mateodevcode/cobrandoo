@@ -6,6 +6,7 @@ import { Boton } from "@/components/ui/Boton";
 import { Hoja } from "@/components/ui/Hoja";
 import { useSync } from "@/lib/offline/hooks";
 import { sincronizador } from "@/lib/offline/sync";
+import { confirmar } from "@/components/ui/Dialogos";
 import { cn } from "@/lib/cn";
 
 /** Indicador de conexión y cola de envíos. Al tocarlo muestra el detalle. */
@@ -81,7 +82,15 @@ export function EstadoConexion({ oscuro, className }) {
                         Reintentar
                       </button>
                       <button
-                        onClick={() => window.confirm("Se borrará del teléfono y no se enviará. ¿Descartar?") && sincronizador.descartar(op.id)}
+                        onClick={async () => {
+                          const ok = await confirmar({
+                            titulo: "¿Descartar esta operación?",
+                            mensaje: `“${op.descripcion}” se borrará del teléfono y no se enviará al servidor.`,
+                            textoConfirmar: "Descartar",
+                            peligro: true,
+                          });
+                          if (ok) sincronizador.descartar(op.id);
+                        }}
                         className="text-xs font-semibold text-peligro"
                       >
                         Descartar

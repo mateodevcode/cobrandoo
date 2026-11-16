@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Boton } from "@/components/ui/Boton";
 import { api } from "@/lib/api";
+import { confirmar } from "@/components/ui/Dialogos";
 
 export function EstadoCliente({ id, estado }) {
   const router = useRouter();
@@ -12,7 +13,17 @@ export function EstadoCliente({ id, estado }) {
   const activo = estado === "activo";
 
   async function alternar() {
-    if (activo && !window.confirm("El cliente dejará de aparecer en la ruta y no podrá recibir préstamos nuevos. ¿Continuar?")) return;
+    if (
+      activo &&
+      !(await confirmar({
+        titulo: "¿Desactivar este cliente?",
+        mensaje: "Dejará de aparecer en la ruta y no podrá recibir préstamos nuevos. Sus préstamos y pagos se conservan.",
+        textoConfirmar: "Desactivar",
+        peligro: true,
+      }))
+    ) {
+      return;
+    }
     setCargando(true);
     try {
       await api(`/api/clientes/${id}`, { method: "PATCH", body: { estado: activo ? "inactivo" : "activo" } });

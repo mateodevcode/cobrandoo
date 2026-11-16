@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
+import { Dialogos } from "@/components/ui/Dialogos";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
@@ -27,6 +28,7 @@ export default function RootLayout({ children }) {
     <html lang="es-CO" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full font-sans">
         {children}
+        <Dialogos />
         <Toaster position="top-center" richColors closeButton />
       </body>
     </html>

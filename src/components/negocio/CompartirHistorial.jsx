@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Boton } from "@/components/ui/Boton";
 import { Hoja } from "@/components/ui/Hoja";
 import { api } from "@/lib/api";
+import { confirmar } from "@/components/ui/Dialogos";
 
 /** Link secreto para que el cliente vea su historial sin cuenta. */
 export function CompartirHistorial({ clienteId, nombre, telefono, token: tokenInicial }) {
@@ -26,7 +27,13 @@ export function CompartirHistorial({ clienteId, nombre, telefono, token: tokenIn
   }
 
   async function regenerar() {
-    if (!window.confirm("El link anterior dejará de funcionar. ¿Generar uno nuevo?")) return;
+    const ok = await confirmar({
+      titulo: "¿Generar un link nuevo?",
+      mensaje: "El link anterior dejará de funcionar de inmediato. Tendrás que enviarle el nuevo al cliente.",
+      textoConfirmar: "Generar link nuevo",
+      peligro: true,
+    });
+    if (!ok) return;
     setRegenerando(true);
     try {
       const r = await api(`/api/clientes/${clienteId}/link`, { method: "POST" });

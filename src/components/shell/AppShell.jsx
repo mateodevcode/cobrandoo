@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Banknote, HandCoins, LogOut, Plus, Receipt, UserPlus } from "lucide-react";
 import { Hoja } from "@/components/ui/Hoja";
+import { confirmar } from "@/components/ui/Dialogos";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { NOMBRE_ROL } from "@/lib/roles";
@@ -27,10 +28,15 @@ export function AppShell({ usuario, tiempoReal, children }) {
 
   async function salir() {
     const pendientes = sincronizador?.obtener().pendientes.length ?? 0;
-    const aviso = pendientes
-      ? `Tienes ${pendientes} operación(es) sin enviar. Se enviarán cuando vuelvas a ingresar en este teléfono. ¿Cerrar sesión?`
-      : "¿Cerrar sesión?";
-    if (!window.confirm(aviso)) return;
+    const ok = await confirmar({
+      titulo: "¿Cerrar sesión?",
+      mensaje: pendientes
+        ? `Tienes ${pendientes} operación(es) sin enviar. Quedan guardadas en este teléfono y se enviarán cuando vuelvas a ingresar.`
+        : "Tendrás que volver a ingresar con tu correo y contraseña.",
+      textoConfirmar: "Cerrar sesión",
+      peligro: pendientes > 0,
+    });
+    if (!ok) return;
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
     await limpiarOffline().catch(() => {});
     // Recarga completa a propósito: no debe quedar nada de la sesión en memoria
