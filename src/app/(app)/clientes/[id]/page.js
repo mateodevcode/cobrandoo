@@ -8,6 +8,7 @@ import * as clientes from "@/server/services/clientes.service";
 import * as prestamos from "@/server/services/prestamos.service";
 import { Avatar, Insignia } from "@/components/ui/Insignia";
 import { BotonCobrar } from "@/components/negocio/BotonCobrar";
+import { CompartirHistorial } from "@/components/negocio/CompartirHistorial";
 import { METODOS } from "@/lib/prestamos/metodos";
 import { dinero, fecha } from "@/lib/formato";
 
@@ -65,6 +66,7 @@ export default async function PaginaCliente({ params }) {
               </a>
             </>
           )}
+          <CompartirHistorial clienteId={cliente.id} nombre={cliente.nombre} telefono={cliente.telefono} token={cliente.token_publico} />
           {activos.length > 0 && <BotonCobrar clienteId={cliente.id} cliente={cliente.nombre} prestamos={activos} tamano="sm" />}
         </div>
 

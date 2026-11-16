@@ -48,4 +48,4 @@ src/app/               páginas y rutas API
 2. ✅ Clientes, rutas, préstamos (métodos 1 y 2), pagos y caja — motor en `src/lib/prestamos/` (pruebas: `npm test`), tarea diaria `/api/cron/diario` (requiere `CRON_SECRET`)
 3. ✅ Modo sin internet + sincronización — PWA (`public/sw.js`), datos en IndexedDB y cola de envíos en `src/lib/offline/`. Funcionan sin señal: ruta, cobros, mi caja, gastos, nuevo cliente y nuevo préstamo. Operaciones hasta 7 días sin enviar.
 4. ✅ Cierre de día (el cobrador entrega todo al jefe), cuadres del supervisor (aprobar / con fallo / resuelto), día cerrado sin movimientos nuevos, tiempo real con socket-core (`src/server/socket.js`) y notificaciones push (VAPID)
-5. Link público del cliente, estadísticas y más métodos de préstamo
+5. ✅ Link público del cliente (`/c/{token}`, sin cuenta, regenerable), reportes (dinero del negocio, cartera, mora, por persona) y métodos "solo interés" e "interés descontado al entregar" + planes rápidos

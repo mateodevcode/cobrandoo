@@ -36,7 +36,7 @@ export function menuPara(rol) {
     { href: "/equipo", etiqueta: "Equipo", icono: UsersRound },
     { href: "/ruta", etiqueta: "Rutas", icono: Route, movil: false },
     { href: "/caja", etiqueta: "Mi caja", icono: Wallet, movil: false },
-    { href: "/reportes", etiqueta: "Reportes", icono: BarChart3, pronto: true, movil: false },
+    { href: "/reportes", etiqueta: "Reportes", icono: BarChart3, movil: false },
     { href: "/metodos", etiqueta: "Métodos", icono: BookOpen, movil: false },
   ];
 }

@@ -90,6 +90,7 @@ export function construirVista(datos, pendientes = [], hoy = hoyBogota()) {
       sugerido_hoy: r.sugeridoHoy,
       dias_atraso: r.diasAtraso,
       valor_cuota: r.plan.valor_cuota,
+      entregado: r.plan.entregado,
       total_pagado: r.totalPagado,
       tiene_pendientes: p.pendiente || ps.some((x) => x.pendiente),
     });
@@ -153,7 +154,8 @@ export function cajaDe(vista, usuarioId) {
     } else if (op.tipo === "gasto") {
       extra.push({ ...comun, tipo: "gasto", metodo: op.body.metodo, monto: -op.body.monto, categoria: op.body.categoria, descripcion: op.body.descripcion });
     } else if (op.tipo === "prestamo" && op.body.registrar_desembolso !== false) {
-      extra.push({ ...comun, tipo: "desembolso", metodo: op.body.metodo_desembolso, monto: -op.body.capital, cliente_nombre: vista.clientes.get(op.body.cliente_id)?.nombre });
+      const entregado = vista.prestamos.find((p) => p.id === op.id)?.entregado ?? op.body.capital;
+      extra.push({ ...comun, tipo: "desembolso", metodo: op.body.metodo_desembolso, monto: -entregado, cliente_nombre: vista.clientes.get(op.body.cliente_id)?.nombre });
     }
   }
   const movimientos = [...extra.reverse(), ...base];

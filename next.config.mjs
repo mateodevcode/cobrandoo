@@ -24,6 +24,15 @@ const nextConfig = {
         ],
       },
       {
+        // Historial público del cliente: nunca en buscadores ni en cachés compartidas
+        source: "/c/:token*",
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },

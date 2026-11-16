@@ -124,12 +124,12 @@ export async function crear(yo, d, ip) {
     const { rows } = await db.query(
       `INSERT INTO prestamos (id, organizacion_id, cliente_id, cobrador_id, metodo, parametros, capital, tasa, base_interes,
                              frecuencia, n_cuotas, valor_cuota, recargo_tipo, recargo_valor, metodo_desembolso,
-                             fecha_inicio, fecha_vencimiento, proximo_corte, notas, creado_por)
-       VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+                             fecha_inicio, fecha_vencimiento, proximo_corte, notas, creado_por, monto_entregado)
+       VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING id`,
       [d.id ?? null, yo.org, cliente.id, cliente.cobrador_id, d.metodo, JSON.stringify(parametros), d.capital, d.tasa,
        d.base_interes, d.frecuencia, d.n_cuotas, plan.valor_cuota, d.recargo_tipo, d.recargo_valor, d.metodo_desembolso,
-       fechaInicio, plan.fecha_vencimiento, plan.proximo_corte, d.notas, yo.id]
+       fechaInicio, plan.fecha_vencimiento, plan.proximo_corte, d.notas, yo.id, plan.entregado]
     );
     const id = rows[0].id;
 
@@ -143,9 +143,10 @@ export async function crear(yo, d, ip) {
 
     // El dinero sale de la caja de quien presta (hoy). Un préstamo antiguo que se está
     // registrando en el sistema puede marcarse para no mover la caja.
-    if (d.registrar_desembolso) {
+    // (Con interés descontado sale de caja menos que el capital.)
+    if (d.registrar_desembolso && plan.entregado > 0) {
       await registrarMovimiento(db, {
-        organizacionId: yo.org, usuarioId: yo.id, tipo: "desembolso", metodo: d.metodo_desembolso, monto: -d.capital,
+        organizacionId: yo.org, usuarioId: yo.id, tipo: "desembolso", metodo: d.metodo_desembolso, monto: -plan.entregado,
         fecha: fechaDeOperacion(d.creado_en_dispositivo),
         descripcion: `Préstamo a ${cliente.nombre}`, refTipo: "prestamo", refId: id, creadoPor: yo.id,
         creadoEnDispositivo: d.creado_en_dispositivo,

@@ -1,6 +1,6 @@
 // Esquemas Zod de clientes, rutas, préstamos, pagos y caja (cliente y servidor).
 import { z } from "zod";
-import { IDS_METODOS } from "./prestamos/metodos.js";
+import { IDS_METODOS, METODOS } from "./prestamos/metodos.js";
 import { IDS_BASES, IDS_METODOS_PAGO, IDS_RECARGOS, IDS_CATEGORIAS_GASTO, FRECUENCIAS, TASA_POR_DEFECTO } from "./prestamos/constantes.js";
 import { esFecha } from "./fechas.js";
 
@@ -98,7 +98,7 @@ export const prestamoSchema = z
     creado_en_dispositivo: z.iso.datetime({ offset: true }).optional(),
   })
   .superRefine((d, ctx) => {
-    if (d.metodo === "cuotas_fijas") {
+    if (METODOS[d.metodo].usaCuotas) {
       if (!d.frecuencia) ctx.addIssue({ code: "custom", path: ["frecuencia"], message: "Elige cada cuánto paga" });
       if (!d.n_cuotas) ctx.addIssue({ code: "custom", path: ["n_cuotas"], message: "Indica el número de cuotas" });
     }
@@ -109,11 +109,11 @@ export const prestamoSchema = z
       ctx.addIssue({ code: "custom", path: ["recargo_valor"], message: "Indica el valor del recargo" });
     }
   })
-  .transform((d) =>
-    d.metodo === "cuotas_fijas"
-      ? d
-      : { ...d, frecuencia: null, n_cuotas: null, recargo_tipo: "ninguno", recargo_valor: 0 }
-  );
+  .transform((d) => ({
+    ...d,
+    ...(METODOS[d.metodo].usaCuotas ? {} : { frecuencia: null, n_cuotas: null }),
+    ...(METODOS[d.metodo].usaRecargo ? {} : { recargo_tipo: "ninguno", recargo_valor: 0 }),
+  }));
 
 // ===== Pagos =====
 export const pagoSchema = z.object({

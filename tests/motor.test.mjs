@@ -117,6 +117,32 @@ test("anular un pago (quitarlo) recalcula todo", () => {
   assert.equal(simular({ prestamo: p, pagos: [], hasta: "2026-01-04" }).saldos.recargo, 2_000);
 });
 
+test("solo interés: paga el interés cada mes y el capital al final", () => {
+  const p = { ...base, metodo: "solo_interes", base_interes: "capital_pendiente", n_cuotas: 3, frecuencia: "mensual", recargo_tipo: "ninguno" };
+  const r = simular({ prestamo: p, hasta: "2026-01-02" });
+  assert.deepEqual(r.plan.cuotas.map((c) => c.monto), [100_000, 100_000, 1_100_000]);
+  assert.equal(r.saldo, 1_300_000);
+  assert.equal(r.plan.fecha_vencimiento, "2026-04-01");
+  // Pagó los 2 primeros intereses a tiempo: queda debiendo capital + último interés
+  const pagos = [pago("a", 100_000, "2026-01-31"), pago("b", 100_000, "2026-03-02")];
+  const r2 = simular({ prestamo: p, pagos, hasta: "2026-03-05" });
+  assert.equal(r2.saldo, 1_100_000);
+  assert.equal(r2.diasAtraso, 0);
+});
+
+test("descuento anticipado: se entrega menos y se devuelve el monto completo", () => {
+  const p = { ...base, metodo: "descuento_anticipado", base_interes: "saldo_total", n_cuotas: 20, frecuencia: "diaria", recargo_tipo: "ninguno" };
+  const r = simular({ prestamo: p, hasta: "2026-01-01" });
+  assert.equal(r.plan.entregado, 900_000);
+  assert.equal(r.plan.descuento, 100_000);
+  assert.equal(r.saldo, 1_000_000);
+  assert.equal(r.saldos.interes, 0);
+  assert.equal(r.plan.valor_cuota, 50_000);
+  // Un abono va directo a capital
+  const r2 = simular({ prestamo: p, pagos: [pago("a", 50_000, "2026-01-02")], hasta: "2026-01-02" });
+  assert.deepEqual(r2.aplicaciones.a, { recargo: 0, interes: 0, capital: 50_000, sobrante: 0 });
+});
+
 test("sobrante cuando paga de más", () => {
   const r = simular({ prestamo: { ...base, metodo: "interes_mensual", base_interes: "saldo_total" }, pagos: [pago("p1", 1_200_000, "2026-01-05")], hasta: "2026-01-05" });
   assert.equal(r.estado, "pagado");

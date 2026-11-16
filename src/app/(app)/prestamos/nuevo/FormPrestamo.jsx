@@ -9,7 +9,7 @@ import { Boton } from "@/components/ui/Boton";
 import { Campo } from "@/components/ui/Campo";
 import { CampoDinero } from "@/components/ui/CampoDinero";
 import { Chips } from "@/components/ui/Chips";
-import { LISTA_METODOS, METODOS, interesDe } from "@/lib/prestamos/metodos";
+import { LISTA_METODOS, METODOS, PRESETS, interesDe } from "@/lib/prestamos/metodos";
 import { BASES_INTERES, FRECUENCIAS, METODOS_PAGO, RECARGOS, TASA_POR_DEFECTO, DIAS_PERIODO } from "@/lib/prestamos/constantes";
 import { diasEntre } from "@/lib/fechas";
 import { dinero, fecha } from "@/lib/formato";
@@ -160,6 +160,23 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
             </Link>
           }
         >
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" aria-label="Planes rápidos">
+            {PRESETS.map((pr) => (
+              <button
+                key={pr.id}
+                type="button"
+                onClick={() => {
+                  setMetodo(pr.metodo);
+                  setTasa(pr.tasa);
+                  if (pr.n_cuotas) setNCuotas(pr.n_cuotas);
+                  if (pr.frecuencia) setFrecuencia(pr.frecuencia);
+                }}
+                className="shrink-0 rounded-full border border-borde bg-fondo px-3 py-1.5 text-xs font-semibold text-suave hover:border-primario hover:text-primario"
+              >
+                {pr.nombre}
+              </button>
+            ))}
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {LISTA_METODOS.map((x) => (
               <button
@@ -278,7 +295,9 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
               <p className="text-xs text-white/75">Total a pagar</p>
               <p className="tabular text-3xl font-bold">{dinero(plan.total_inicial)}</p>
               <p className="mt-1 text-xs text-white/75">
-                Presta {dinero(capital)} + {dinero(plan.total_inicial - capital)} de interés
+                {plan.descuento
+                  ? `Se le entregan ${dinero(plan.entregado)} (${dinero(plan.descuento)} de interés descontado)`
+                  : `Presta ${dinero(capital)} + ${dinero(plan.total_inicial - capital)} de interés`}
               </p>
             </div>
             {m.usaCuotas ? (
