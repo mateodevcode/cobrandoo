@@ -26,6 +26,9 @@ export function RutaLocal({ usuario }) {
         <h1 className="text-2xl font-bold">Ruta de hoy{nombreCobrador && ` · ${nombreCobrador}`}</h1>
       </header>
 
+      {esCobrador && datos?.caja?.cerrada && datos.caja.fecha === vista?.hoy && (
+        <p className="rounded-2xl bg-fondo p-3 text-sm text-suave">🔒 Ya cerraste el día. Los cobros de hoy quedaron entregados a tu jefe.</p>
+      )}
       {!vista ? (
         <CargandoDatos />
       ) : (

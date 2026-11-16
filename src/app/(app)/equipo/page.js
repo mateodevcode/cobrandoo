@@ -45,7 +45,17 @@ export default async function PaginaEquipo() {
                     {yo.rol === "dueno" && u.jefe_nombre && ` · reporta a ${u.jefe_nombre}`}
                   </p>
                 </div>
-                {u.pendiente > 0 ? <Insignia tono="alerta">Falta {dinero(u.pendiente)}</Insignia> : <Insignia tono="exito">Al día</Insignia>}
+                {u.cierre_estado ? (
+                  <Link href="/cuadres">
+                    <Insignia tono={u.cierre_estado === "pendiente" ? "alerta" : u.cierre_estado === "con_fallo" ? "peligro" : "exito"}>
+                      {u.cierre_estado === "pendiente" ? "Cerró · revisar" : u.cierre_estado === "con_fallo" ? "Cierre con fallo" : "Día cerrado"}
+                    </Insignia>
+                  </Link>
+                ) : u.pendiente > 0 ? (
+                  <Insignia tono="alerta">Falta {dinero(u.pendiente)}</Insignia>
+                ) : (
+                  <Insignia tono="exito">Al día</Insignia>
+                )}
               </div>
               <dl className="grid grid-cols-4 gap-2 text-center">
                 <Mini titulo="Base" valor={u.base} />
@@ -54,7 +64,7 @@ export default async function PaginaEquipo() {
                 <Mini titulo="Efectivo" valor={u.efectivo} fuerte />
               </dl>
               <div className="flex flex-wrap gap-2">
-                {u.rol === "cobrador" && <BotonBase cobrador={{ id: u.id, nombre: u.nombre }} />}
+                {u.rol === "cobrador" && u.jornada_estado !== "cerrada" && <BotonBase cobrador={{ id: u.id, nombre: u.nombre }} />}
                 <Link href={`/caja?usuario=${u.id}`} className="inline-flex h-8 items-center rounded-xl border border-borde px-3 text-xs font-semibold hover:bg-fondo">
                   Ver caja
                 </Link>

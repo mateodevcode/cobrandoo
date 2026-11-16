@@ -23,6 +23,13 @@ function crearPool() {
     max: Number(process.env.DATABASE_POOL_MAX || 3),
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 8_000,
+    // Si la red al VPS se corta a mitad de una transacción, Postgres la cierra sola
+    // y suelta los bloqueos (si no, quedaría "idle in transaction" frenando todo).
+    idle_in_transaction_session_timeout: 30_000,
+    statement_timeout: 30_000,
+    // Detecta conexiones muertas (cortes de red, NAT) en vez de esperar indefinidamente
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
   });
   pool.on("error", (err) => console.error("[db] error en conexión inactiva:", err.message));
   return pool;
@@ -49,6 +56,7 @@ export async function uno(text, params) {
 /** Ejecuta fn(client) dentro de una transacción. */
 export async function transaccion(fn) {
   const client = await pool().connect();
+  let descartar;
   try {
     await client.query("BEGIN");
     const resultado = await fn(client);
@@ -56,8 +64,11 @@ export async function transaccion(fn) {
     return resultado;
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
+    // Error de red (sin código SQLSTATE de Postgres ni de negocio): se descarta la conexión
+    // para no devolver al pool una conexión rota
+    if (err?.code && !/^[0-9A-Z]{5}$/.test(err.code) && !err.status) descartar = err;
     throw err;
   } finally {
-    client.release();
+    client.release(descartar);
   }
 }

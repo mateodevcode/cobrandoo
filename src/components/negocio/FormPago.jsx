@@ -10,6 +10,8 @@ import { METODOS_PAGO } from "@/lib/prestamos/constantes";
 import { METODOS } from "@/lib/prestamos/metodos";
 import { dinero } from "@/lib/formato";
 import { sincronizador } from "@/lib/offline/sync";
+import { useSync } from "@/lib/offline/hooks";
+import { hoyBogota } from "@/lib/fechas";
 import { cn } from "@/lib/cn";
 
 /**
@@ -24,6 +26,8 @@ export function FormPago({ clienteId, clienteNombre, prestamos, onListo }) {
   const [nota, setNota] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
+  const { datos, usuarioId } = useSync();
+  const diaCerrado = !!datos?.caja?.cerrada && datos.caja.fecha === hoyBogota() && datos.usuario?.id === usuarioId;
 
   const atajos = [
     p.sugerido_hoy > 0 && { etiqueta: "Al día", valor: p.sugerido_hoy },
@@ -33,6 +37,7 @@ export function FormPago({ clienteId, clienteNombre, prestamos, onListo }) {
 
   async function enviar(e) {
     e.preventDefault();
+    if (diaCerrado) return setError("Ya cerraste la caja de hoy. Habla con tu jefe para registrar este cobro.");
     if (!monto) return setError("Escribe el valor");
     if (monto > p.saldo) return setError(`Máximo ${dinero(p.saldo)}`);
     setError("");

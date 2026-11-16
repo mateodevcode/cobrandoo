@@ -5,15 +5,24 @@ import { exigirVisible, filtroVisible } from "../permisos";
 import { hoyBogota, sumarDias } from "@/lib/fechas";
 import * as auditoria from "../repos/auditoria.repo";
 
-/** Jornada (caja del día) de un usuario; la crea si no existe. */
-export async function obtenerJornada(db, { organizacionId, usuarioId, fecha = hoyBogota() }) {
+/**
+ * Jornada (caja del día) de un usuario; la crea si no existe.
+ * Con `paraEscribir`: un día ya cerrado no recibe movimientos. Si es un día anterior
+ * (p. ej. un cobro sin señal que llegó después del cierre) se anota en la caja de hoy;
+ * si hoy ya está cerrado, se rechaza.
+ */
+export async function obtenerJornada(db, { organizacionId, usuarioId, fecha = hoyBogota(), paraEscribir = false }) {
   const { rows } = await db.query(
     `INSERT INTO jornadas (organizacion_id, usuario_id, fecha) VALUES ($1, $2, $3)
      ON CONFLICT (usuario_id, fecha) DO UPDATE SET usuario_id = EXCLUDED.usuario_id
-     RETURNING id, estado`,
+     RETURNING id, estado, fecha`,
     [organizacionId, usuarioId, fecha]
   );
-  return rows[0];
+  const j = rows[0];
+  if (!paraEscribir || j.estado === "abierta") return j;
+  const hoy = hoyBogota();
+  if (fecha < hoy) return obtenerJornada(db, { organizacionId, usuarioId, fecha: hoy, paraEscribir: true });
+  throw new ErrorApp(409, "La caja de hoy ya está cerrada. Habla con tu jefe para registrar este movimiento.", "dia_cerrado");
 }
 
 /** Días hacia atrás que se aceptan para operaciones hechas sin señal. */
@@ -36,9 +45,18 @@ export function fechaDeOperacion(creadoEnDispositivo) {
 
 /** Inserta un movimiento en la caja de `usuarioId` (del día `m.fecha`, o hoy). Devuelve el id. */
 export async function registrarMovimiento(db, m) {
-  const jornada = m.jornadaId
-    ? { id: m.jornadaId }
-    : await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId, fecha: m.fecha });
+  // Reintento del mismo movimiento (modo sin señal): no se vuelve a evaluar ni a duplicar
+  if (m.id) {
+    const { rows: ya } = await db.query(`SELECT id, jornada_id FROM movimientos_caja WHERE id = $1`, [m.id]);
+    if (ya[0]) return { id: ya[0].id, jornadaId: ya[0].jornada_id, duplicado: true };
+  }
+  let jornada;
+  if (m.jornadaId) {
+    const { rows: js } = await db.query(`SELECT id, estado FROM jornadas WHERE id = $1`, [m.jornadaId]);
+    jornada = js[0]?.estado === "abierta" ? js[0] : await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId, paraEscribir: true });
+  } else {
+    jornada = await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId, fecha: m.fecha, paraEscribir: true });
+  }
   const { rows } = await db.query(
     `INSERT INTO movimientos_caja (id, organizacion_id, usuario_id, jornada_id, tipo, metodo, monto, categoria,
                                    descripcion, ref_tipo, ref_id, contraparte_id, creado_por, creado_en_dispositivo)
@@ -87,9 +105,14 @@ export async function entregarBase(yo, d, ip) {
       descripcion: d.descripcion ?? `Base entregada por ${yo.nombre}`, contraparteId: yo.id, creadoPor: yo.id,
     });
     if (!r.duplicado) {
+      // Lado del jefe: el dinero sale de su caja
+      await registrarMovimiento(db, {
+        organizacionId: yo.org, usuarioId: yo.id, tipo: "base_entregada", metodo: d.metodo, monto: -d.monto, fecha,
+        descripcion: `Base para ${cob.nombre}`, contraparteId: cob.id, refTipo: "movimiento", refId: r.id, creadoPor: yo.id,
+      });
       await auditoria.registrar(db, { organizacionId: yo.org, usuarioId: yo.id, accion: "caja.base", entidad: "movimiento", entidadId: r.id, datos: { cobrador: cob.id, monto: d.monto }, ip });
     }
-    return r;
+    return { ...r, cobradorId: cob.id, cobradorNombre: cob.nombre };
   });
 }
 
@@ -99,7 +122,8 @@ export async function equipoHoy(yo, fecha = hoyBogota()) {
   const filtro = await filtroVisible(yo, "u.id", "u.organizacion_id", params);
   params.push(yo.id, fecha);
   const { rows } = await query(
-    `SELECT u.id, u.nombre, u.rol, j.nombre AS jefe_nombre,
+    `SELECT u.id, u.nombre, u.rol, j.nombre AS jefe_nombre, jo.estado AS jornada_estado,
+            (SELECT ci.estado FROM cierres ci WHERE ci.jornada_id = jo.id) AS cierre_estado,
             COALESCE(sum(m.monto) FILTER (WHERE m.metodo = 'efectivo'), 0)::bigint AS efectivo,
             COALESCE(sum(m.monto) FILTER (WHERE m.tipo = 'base'), 0)::bigint AS base,
             COALESCE(sum(m.monto) FILTER (WHERE m.tipo IN ('cobro', 'anulacion') AND m.ref_tipo = 'pago'), 0)::bigint AS cobrado,
@@ -111,7 +135,7 @@ export async function equipoHoy(yo, fecha = hoyBogota()) {
        LEFT JOIN jornadas jo ON jo.usuario_id = u.id AND jo.fecha = $${params.length}
        LEFT JOIN movimientos_caja m ON m.jornada_id = jo.id
       WHERE ${filtro} AND u.id <> $${params.length - 1} AND u.estado = 'activo' AND u.rol IN ('supervisor', 'cobrador')
-      GROUP BY u.id, j.nombre
+      GROUP BY u.id, j.nombre, jo.id
       ORDER BY array_position(ARRAY['supervisor','cobrador'], u.rol), u.nombre`,
     params
   );
@@ -143,7 +167,7 @@ export async function resumenCaja(yo, usuarioId, fecha = hoyBogota()) {
       ).rows
     : [];
 
-  const totales = { base: 0, cobro: 0, desembolso: 0, gasto: 0, entrega: 0, ajuste: 0, anulacion: 0 };
+  const totales = { base: 0, cobro: 0, desembolso: 0, gasto: 0, entrega: 0, ajuste: 0, anulacion: 0, base_entregada: 0, recibido: 0 };
   const porMetodo = { efectivo: 0, nequi: 0, daviplata: 0, transferencia: 0 };
   for (const m of movimientos) {
     totales[m.tipo] += m.monto;

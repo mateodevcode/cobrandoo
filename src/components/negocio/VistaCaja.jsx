@@ -11,6 +11,8 @@ const NOMBRE_TIPO = {
   entrega: "Entrega al jefe",
   ajuste: "Ajuste",
   anulacion: "Anulación",
+  base_entregada: "Base entregada",
+  recibido: "Recibido de cobrador",
 };
 const NOMBRE_CATEGORIA = Object.fromEntries(CATEGORIAS_GASTO.map((c) => [c.id, c.nombre]));
 
@@ -28,10 +30,14 @@ export function VistaCaja({ caja, titulo, navegacion, accion, propia }) {
       </header>
 
       <section className="rounded-tarjeta bg-gradient-to-br from-marino-800 to-primario p-5 text-white shadow-tarjeta">
-        <p className="text-sm text-white/75">Efectivo que debería tener</p>
+        <p className="text-sm text-white/75">{caja.cerrada ? "Día cerrado · efectivo que quedó" : "Efectivo que debería tener"}</p>
         <p className="tabular text-4xl font-bold">{dinero(caja.efectivoEsperado)}</p>
-        <p className="mt-1 text-xs text-white/75">Base + cobros en efectivo − préstamos entregados − gastos. Lo digital va aparte.</p>
-        {caja.efectivoEsperado < 0 && (
+        <p className="mt-1 text-xs text-white/75">
+          {caja.cerrada
+            ? "Ya se entregó el efectivo al jefe. Si no es cero, es la diferencia del cuadre."
+            : "Base + cobros en efectivo − préstamos entregados − gastos. Lo digital va aparte."}
+        </p>
+        {caja.efectivoEsperado < 0 && !caja.cerrada && (
           <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm">
             La caja está en negativo: se prestó más efectivo del que había. {propia ? "Pídele la base del día a tu jefe." : "Entrégale la base del día."}
           </p>
@@ -82,7 +88,6 @@ export function VistaCaja({ caja, titulo, navegacion, accion, propia }) {
           </ul>
         )}
       </section>
-      <p className="text-center text-xs text-suave">El cierre del día y el cuadre con el supervisor llegan en la fase 4.</p>
     </>
   );
 }

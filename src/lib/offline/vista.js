@@ -157,14 +157,17 @@ export function cajaDe(vista, usuarioId) {
     }
   }
   const movimientos = [...extra.reverse(), ...base];
-  const totales = { base: 0, cobro: 0, desembolso: 0, gasto: 0, entrega: 0, ajuste: 0, anulacion: 0 };
+  const totales = { base: 0, cobro: 0, desembolso: 0, gasto: 0, entrega: 0, ajuste: 0, anulacion: 0, base_entregada: 0, recibido: 0 };
   const porMetodo = { efectivo: 0, nequi: 0, daviplata: 0, transferencia: 0 };
   for (const m of movimientos) {
     totales[m.tipo] += Number(m.monto);
     porMetodo[m.metodo] += Number(m.monto);
   }
+  const cajaHoy = vista.datos.caja?.fecha === vista.hoy ? vista.datos.caja : null;
   return {
     fecha: vista.hoy,
+    cerrada: !!cajaHoy?.cerrada,
+    cierre: cajaHoy?.cierre ?? null,
     movimientos,
     totales,
     porMetodo,

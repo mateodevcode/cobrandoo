@@ -52,6 +52,13 @@ export async function datosOffline(yo) {
     ),
   ]);
 
+  const { rows: cierreHoy } = await query(
+    `SELECT j.estado, c.id, c.estado AS estado_cierre, c.efectivo_esperado, c.efectivo_contado, c.diferencia
+       FROM jornadas j LEFT JOIN cierres c ON c.jornada_id = j.id
+      WHERE j.usuario_id = $1 AND j.fecha = $2`,
+    [yo.id, hoy]
+  );
+
   const idsPrestamos = prestamos.rows.map((p) => p.id);
   const pagos = idsPrestamos.length
     ? (
@@ -74,6 +81,11 @@ export async function datosOffline(yo) {
     clientes: clientes.rows,
     prestamos: prestamos.rows,
     pagos,
-    caja: { fecha: hoy, movimientos: caja.rows },
+    caja: {
+      fecha: hoy,
+      movimientos: caja.rows,
+      cerrada: cierreHoy[0]?.estado === "cerrada",
+      cierre: cierreHoy[0]?.id ? cierreHoy[0] : null,
+    },
   };
 }

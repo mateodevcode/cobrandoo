@@ -36,7 +36,7 @@ export async function registrar(yo, d, ip) {
     // Si se cobró sin señal, el pago queda en el día en que realmente se hizo
     let fecha = fechaDeOperacion(d.creado_en_dispositivo);
     if (fecha < p.fecha_inicio) fecha = p.fecha_inicio;
-    const jornada = await obtenerJornada(db, { organizacionId: yo.org, usuarioId: yo.id, fecha });
+    const jornada = await obtenerJornada(db, { organizacionId: yo.org, usuarioId: yo.id, fecha, paraEscribir: true });
     await db.query(
       `INSERT INTO pagos (id, organizacion_id, prestamo_id, cliente_id, cobrador_id, jornada_id, monto, metodo, fecha, nota, creado_en_dispositivo)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,

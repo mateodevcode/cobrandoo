@@ -30,12 +30,12 @@ export function menuPara(rol) {
   // dueño y supervisor
   return [
     { href: "/inicio", etiqueta: "Inicio", icono: Home },
-    { href: "/prestamos", etiqueta: "Préstamos", icono: HandCoins },
+    { href: "/prestamos", etiqueta: "Préstamos", icono: HandCoins, movil: false },
     { href: "/clientes", etiqueta: "Clientes", icono: Users },
+    { href: "/cuadres", etiqueta: "Cuadres", icono: ClipboardCheck },
     { href: "/equipo", etiqueta: "Equipo", icono: UsersRound },
     { href: "/ruta", etiqueta: "Rutas", icono: Route, movil: false },
     { href: "/caja", etiqueta: "Mi caja", icono: Wallet, movil: false },
-    { href: "/cuadres", etiqueta: "Cuadres", icono: ClipboardCheck, pronto: true, movil: false },
     { href: "/reportes", etiqueta: "Reportes", icono: BarChart3, pronto: true, movil: false },
     { href: "/metodos", etiqueta: "Métodos", icono: BookOpen, movil: false },
   ];

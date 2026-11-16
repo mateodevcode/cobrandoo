@@ -2,7 +2,7 @@
 // - Archivos estáticos (_next/static, íconos): caché primero.
 // - Páginas: red primero; sin red, la última versión guardada o la página /offline.
 // - APIs y escrituras: nunca se cachean (la cola de la app se encarga de reintentar).
-const VERSION = "v1";
+const VERSION = "v2";
 const ESTATICOS = `cobrandoo-estaticos-${VERSION}`;
 const PAGINAS = `cobrandoo-paginas-${VERSION}`;
 const ESENCIALES = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png"];
@@ -77,6 +77,37 @@ self.addEventListener("fetch", (e) => {
   if (req.mode === "navigate") {
     e.respondWith(paginaRedPrimero(req));
   }
+});
+
+// ===== Notificaciones push (llegan aunque la app esté cerrada) =====
+self.addEventListener("push", (e) => {
+  let d = {};
+  try {
+    d = e.data?.json() ?? {};
+  } catch {
+    d = { titulo: e.data?.text() };
+  }
+  e.waitUntil(
+    self.registration.showNotification(d.titulo || "Cobrandoo", {
+      body: d.cuerpo || "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: d.etiqueta,
+      data: { url: d.url || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || "/", self.location.origin).href;
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((ventanas) => {
+      const abierta = ventanas.find((v) => v.url.startsWith(self.location.origin));
+      if (abierta) return abierta.focus().then((v) => v.navigate(url));
+      return self.clients.openWindow(url);
+    })
+  );
 });
 
 async function paginaRedPrimero(req) {

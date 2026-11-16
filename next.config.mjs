@@ -3,6 +3,8 @@ const nextConfig = {
   // Cache Components apagado: casi todo es dinámico por usuario y el modo offline vive en el cliente.
   cacheComponents: false,
   poweredByHeader: false,
+  // Librerías de Node que se usan tal cual en el servidor (no se empaquetan)
+  serverExternalPackages: ["web-push", "pg"],
   turbopack: {
     rules: {
       "*.css": {

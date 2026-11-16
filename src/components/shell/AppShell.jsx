@@ -13,9 +13,11 @@ import { Avatar } from "@/components/ui/Insignia";
 import { menuPara } from "./navegacion";
 import { ProveedorSync, limpiarOffline } from "@/components/offline/ProveedorSync";
 import { EstadoConexion } from "@/components/offline/EstadoConexion";
+import { ProveedorTiempoReal } from "@/components/offline/ProveedorTiempoReal";
+import { Campana } from "@/components/offline/Campana";
 import { sincronizador } from "@/lib/offline/sync";
 
-export function AppShell({ usuario, children }) {
+export function AppShell({ usuario, tiempoReal, children }) {
   const pathname = usePathname();
   const router = useRouter();
   const menu = menuPara(usuario.rol);
@@ -41,11 +43,13 @@ export function AppShell({ usuario, children }) {
   return (
     <div className="min-h-dvh lg:flex">
       <ProveedorSync usuario={usuario} />
+      <ProveedorTiempoReal config={tiempoReal} />
       {/* ===== Barra lateral (escritorio) ===== */}
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-marino-900 p-4 text-white lg:flex">
         <div className="flex items-center gap-2.5 px-2 py-3">
           <span className="size-8 rounded-lg bg-acento" />
           <span className="text-lg font-bold">Cobrandoo</span>
+          {conBotonAccion && <Campana oscuro className="ml-auto" />}
         </div>
         {conBotonAccion && <EstadoConexion oscuro className="mx-2 w-fit" />}
 
@@ -98,6 +102,7 @@ export function AppShell({ usuario, children }) {
           <span className="size-7 rounded-lg bg-acento" />
           <span className="font-bold">Cobrandoo</span>
           {conBotonAccion && <EstadoConexion className="ml-auto" />}
+          {conBotonAccion && <Campana />}
           <button
             onClick={salir}
             className={cn("flex items-center gap-2 rounded-full", !conBotonAccion && "ml-auto")}

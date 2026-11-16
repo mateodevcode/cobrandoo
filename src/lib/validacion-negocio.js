@@ -129,6 +129,27 @@ export const anulacionSchema = z.object({
   motivo: texto(300).min(3, "Explica brevemente el motivo"),
 });
 
+// ===== Cierre del día =====
+export const cierreSchema = z.object({
+  efectivo_contado: pesos(0, 10_000_000_000, "El efectivo contado"),
+  observacion: opcional(500),
+  fecha: fecha.optional(),
+});
+
+export const revisionSchema = z
+  .object({
+    decision: z.enum(["aprobar", "rechazar"]),
+    comentario: opcional(500),
+  })
+  .refine((d) => d.decision === "aprobar" || (d.comentario && d.comentario.length >= 3), {
+    path: ["comentario"],
+    message: "Explica qué falló",
+  });
+
+export const resolucionSchema = z.object({
+  comentario: texto(500).min(3, "Explica cómo se resolvió"),
+});
+
 // ===== Caja =====
 export const gastoSchema = z.object({
   id: z.uuid().optional(),
