@@ -16,6 +16,7 @@ import { EstadoConexion } from "@/components/offline/EstadoConexion";
 import { ProveedorTiempoReal } from "@/components/offline/ProveedorTiempoReal";
 import { Campana } from "@/components/offline/Campana";
 import { sincronizador } from "@/lib/offline/sync";
+import { Logo } from "@/components/ui/Logo";
 
 export function AppShell({ usuario, tiempoReal, children }) {
   const pathname = usePathname();
@@ -47,7 +48,7 @@ export function AppShell({ usuario, tiempoReal, children }) {
       {/* ===== Barra lateral (escritorio) ===== */}
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-marino-900 p-4 text-white lg:flex">
         <div className="flex items-center gap-2.5 px-2 py-3">
-          <span className="size-8 rounded-lg bg-acento" />
+          <Logo />
           <span className="text-lg font-bold">Cobrandoo</span>
           {conBotonAccion && <Campana oscuro className="ml-auto" />}
         </div>
@@ -99,7 +100,7 @@ export function AppShell({ usuario, tiempoReal, children }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Encabezado móvil */}
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-borde bg-superficie/90 px-4 py-3 backdrop-blur lg:hidden">
-          <span className="size-7 rounded-lg bg-acento" />
+          <Logo className="size-7" />
           <span className="font-bold">Cobrandoo</span>
           {conBotonAccion && <EstadoConexion className="ml-auto" />}
           {conBotonAccion && <Campana />}

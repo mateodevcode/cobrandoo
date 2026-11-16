@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { FormularioLogin } from "./FormularioLogin";
+import { Logo } from "@/components/ui/Logo";
 
 export const metadata = { title: "Ingresar" };
 
@@ -39,7 +40,7 @@ export default function PaginaLogin() {
 function Marca({ oscuro }) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="size-8 rounded-lg bg-acento" />
+      <Logo />
       <span className={`text-lg font-bold ${oscuro ? "text-texto" : "text-white"}`}>Cobrandoo</span>
     </div>
   );

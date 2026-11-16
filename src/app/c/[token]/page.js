@@ -6,6 +6,7 @@ import { METODOS } from "@/lib/prestamos/metodos";
 import { NOMBRE_METODO_PAGO } from "@/lib/prestamos/constantes";
 import { dinero, fecha } from "@/lib/formato";
 import { cn } from "@/lib/cn";
+import { Logo } from "@/components/ui/Logo";
 
 export const metadata = {
   title: "Mi historial",
@@ -37,7 +38,7 @@ export default async function HistorialCliente({ params }) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-xl flex-col gap-4 px-4 py-6">
       <header className="flex items-center gap-2.5">
-        <span className="size-7 rounded-lg bg-acento" />
+        <Logo className="size-7" />
         <span className="font-bold">{cliente.organizacion}</span>
       </header>
 
