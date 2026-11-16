@@ -34,12 +34,16 @@ async function llamar(ruta, { method = "GET", body } = {}) {
 }
 
 const canalesListos = new Set();
+
+/** ¿La respuesta dice que el canal ya existe? (socket-core responde 400 "channel name already exists") */
+const yaExiste = (r) => r.status === 409 || /already exists|ya existe/i.test(String(r.json?.error ?? ""));
+
 async function asegurarCanal(canal) {
   if (canalesListos.has(canal)) return;
   const r = await llamar("/channels", { method: "POST", body: { name: canal, description: "Cobrandoo" } });
-  // 409 = ya existe: también sirve
-  if (r.status < 300 || r.status === 409) canalesListos.add(canal);
-  else throw new Error(`socket-core: no se pudo crear el canal (${r.status})`);
+  // Creado ahora o creado antes (por otro servidor de Vercel o un despliegue anterior): ambos sirven
+  if (r.status < 300 || yaExiste(r)) canalesListos.add(canal);
+  else throw new Error(`socket-core: no se pudo crear el canal (${r.status}: ${r.json?.error ?? "sin detalle"})`);
 }
 
 /** JWT corto para que `usuarioId` escuche el canal de su organización. */
