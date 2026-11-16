@@ -4,7 +4,7 @@ import { ErrorApp } from "../http";
 import { exigirVisible } from "../permisos";
 import { hoyBogota } from "@/lib/fechas";
 import { dinero } from "@/lib/formato";
-import { recalcular } from "./prestamos.service";
+import { recalcular, cargarParaCalcular, calcular, guardarCalculo } from "./prestamos.service";
 import { obtenerJornada, registrarMovimiento, fechaDeOperacion } from "./caja.service";
 import * as auditoria from "../repos/auditoria.repo";
 
@@ -15,40 +15,60 @@ import * as auditoria from "../repos/auditoria.repo";
 export async function registrar(yo, d, ip) {
   const hoy = hoyBogota();
   return transaccion(async (db) => {
-    const { rows: existe } = await db.query(`SELECT id, prestamo_id FROM pagos WHERE id = $1`, [d.id]);
-    if (existe[0]) {
-      if (existe[0].prestamo_id !== d.prestamo_id) throw new ErrorApp(409, "Identificador de pago repetido", "id_repetido");
+    // 1) Préstamo + pagos + ¿este pago ya existe?  (una consulta, con bloqueo)
+    const p = await cargarParaCalcular(db, d.prestamo_id, d.id);
+    if (p?.pago_existente_de) {
+      if (p.pago_existente_de !== d.prestamo_id) throw new ErrorApp(409, "Identificador de pago repetido", "id_repetido");
       return resultado(db, d.id, true);
     }
+    if (!p) {
+      const { rows } = await db.query(`SELECT 1 FROM pagos WHERE id = $1`, [d.id]);
+      throw rows[0] ? new ErrorApp(409, "Identificador de pago repetido", "id_repetido") : new ErrorApp(404, "Préstamo no encontrado", "no_encontrado");
+    }
+    await exigirVisible(yo, p.cobrador_id, p.organizacion_id);
+    if (p.estado !== "activo") throw new ErrorApp(409, p.estado === "pagado" ? "Este préstamo ya está pagado" : "Este préstamo está anulado", "prestamo_cerrado");
 
-    const { rows } = await db.query(`SELECT id, cobrador_id, organizacion_id, cliente_id, estado FROM prestamos WHERE id = $1`, [d.prestamo_id]);
-    const p0 = rows[0];
-    if (!p0) throw new ErrorApp(404, "Préstamo no encontrado", "no_encontrado");
-    await exigirVisible(yo, p0.cobrador_id, p0.organizacion_id);
-    if (p0.estado !== "activo") throw new ErrorApp(409, p0.estado === "pagado" ? "Este préstamo ya está pagado" : "Este préstamo está anulado", "prestamo_cerrado");
-
-    // Saldo al día antes de aceptar el pago
-    const p = await recalcular(db, p0.id, hoy);
-    if (d.monto > p.saldo) {
-      throw new ErrorApp(400, `El pago supera lo que debe (${dinero(p.saldo)})`, "pago_mayor_saldo");
+    // 2) Saldo al día (en memoria, con el motor) antes de aceptar el pago
+    const antes = calcular(p, p.pagos_validos, hoy);
+    if (d.monto > antes.saldo) {
+      throw new ErrorApp(400, `El pago supera lo que debe (${dinero(antes.saldo)})`, "pago_mayor_saldo");
     }
 
     // Si se cobró sin señal, el pago queda en el día en que realmente se hizo
-    let fecha = fechaDeOperacion(d.creado_en_dispositivo);
-    if (fecha < p.fecha_inicio) fecha = p.fecha_inicio;
+    // (se valida después del chequeo de duplicado: un reintento viejo ya guardado debe responder igual)
+    const fechaDispositivo = fechaDeOperacion(d.creado_en_dispositivo);
+    const fecha = fechaDispositivo < p.fecha_inicio ? p.fecha_inicio : fechaDispositivo;
+    // 3) Caja del día (respeta días cerrados)
     const jornada = await obtenerJornada(db, { organizacionId: yo.org, usuarioId: yo.id, fecha, paraEscribir: true });
+
+    // 4) Pago + movimiento de caja + auditoría  (una consulta)
     await db.query(
-      `INSERT INTO pagos (id, organizacion_id, prestamo_id, cliente_id, cobrador_id, jornada_id, monto, metodo, fecha, nota, creado_en_dispositivo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [d.id, p.organizacion_id, p.id, p.cliente_id, yo.id, jornada.id, d.monto, d.metodo, fecha, d.nota, d.creado_en_dispositivo ?? null]
+      `WITH pago AS (
+         INSERT INTO pagos (id, organizacion_id, prestamo_id, cliente_id, cobrador_id, jornada_id, monto, metodo, fecha, nota, creado_en_dispositivo)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id
+       ),
+       mov AS (
+         INSERT INTO movimientos_caja (organizacion_id, usuario_id, jornada_id, tipo, metodo, monto, ref_tipo, ref_id, creado_por, creado_en_dispositivo)
+         SELECT $2, $5, $6, 'cobro', $8, $7, 'pago', id, $5, $11 FROM pago
+       )
+       INSERT INTO auditoria (organizacion_id, usuario_id, accion, entidad, entidad_id, datos, ip)
+       SELECT $2, $5, 'pago.registrar', 'pago', id, $12, $13 FROM pago`,
+      [d.id, p.organizacion_id, p.id, p.cliente_id, yo.id, jornada.id, d.monto, d.metodo, fecha, d.nota, d.creado_en_dispositivo ?? null,
+       JSON.stringify({ prestamo: p.id, monto: d.monto, metodo: d.metodo }), ip]
     );
-    await registrarMovimiento(db, {
-      organizacionId: p.organizacion_id, usuarioId: yo.id, jornadaId: jornada.id, tipo: "cobro", metodo: d.metodo,
-      monto: d.monto, refTipo: "pago", refId: d.id, creadoPor: yo.id, creadoEnDispositivo: d.creado_en_dispositivo,
-    });
-    await recalcular(db, p.id, hoy);
-    await auditoria.registrar(db, { organizacionId: p.organizacion_id, usuarioId: yo.id, accion: "pago.registrar", entidad: "pago", entidadId: d.id, datos: { prestamo: p.id, monto: d.monto, metodo: d.metodo }, ip });
-    return resultado(db, d.id, false);
+
+    // 5) Recalcular con el pago nuevo (en memoria) y guardar  (una consulta)
+    const pagos = [...p.pagos_validos, { id: d.id, monto: d.monto, fecha, orden: Number.MAX_SAFE_INTEGER }];
+    const r = calcular(p, pagos, hoy);
+    const actualizado = await guardarCalculo(db, p.id, r, pagos, hoy);
+    const a = r.aplicaciones[d.id];
+    return {
+      id: d.id, monto: d.monto, metodo: d.metodo, fecha,
+      aplicado_recargo: a.recargo, aplicado_interes: a.interes, aplicado_capital: a.capital, sobrante: a.sobrante,
+      prestamo_id: p.id, saldo: actualizado.saldo, prestamo_estado: actualizado.estado, cliente_nombre: p.cliente_nombre,
+      duplicado: false,
+    };
   });
 }
 

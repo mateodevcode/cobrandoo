@@ -25,52 +25,82 @@ const condiciones = (p) => ({
 });
 
 /**
- * Recalcula cargos, aplicación de pagos y saldos de un préstamo hasta `hoy`.
+ * Carga y bloquea un préstamo junto con sus pagos válidos, en UNA consulta.
+ * Con `pagoId` indica además si ese pago ya existe (reintentos sin señal).
+ */
+export async function cargarParaCalcular(db, prestamoId, pagoId = null) {
+  const { rows } = await db.query(
+    `SELECT p.*,
+            COALESCE((SELECT json_agg(json_build_object('id', x.id, 'monto', x.monto, 'fecha', x.fecha,
+                                                        'orden', (extract(epoch FROM x.creado_en) * 1000000)::bigint)
+                                      ORDER BY x.fecha, x.creado_en)
+                        FROM pagos x WHERE x.prestamo_id = p.id AND x.anulado_en IS NULL), '[]'::json) AS pagos_validos,
+            (SELECT prestamo_id FROM pagos WHERE id = $2) AS pago_existente_de,
+            (SELECT nombre FROM clientes WHERE id = p.cliente_id) AS cliente_nombre
+       FROM prestamos p WHERE p.id = $1
+        FOR UPDATE OF p`,
+    [prestamoId, pagoId]
+  );
+  const p = rows[0];
+  if (p) p.pagos_validos = p.pagos_validos.map((x) => ({ ...x, monto: Number(x.monto), orden: Number(x.orden) }));
+  return p ?? null;
+}
+
+/** Corre el motor sobre un préstamo cargado (sin tocar la base). */
+export const calcular = (p, pagos, hoy = hoyBogota()) => simular({ prestamo: condiciones(p), pagos, hasta: hoy });
+
+/**
+ * Guarda el resultado del motor en UNA consulta: cargos (solo los que cambian), aplicación
+ * de cada pago y saldos del préstamo.
+ */
+export async function guardarCalculo(db, prestamoId, r, pagos, hoy = hoyBogota()) {
+  const a = pagos.map((x) => r.aplicaciones[x.id] ?? { recargo: 0, interes: 0, capital: 0, sobrante: x.monto });
+  const { rows } = await db.query(
+    `WITH nuevos AS (
+       SELECT * FROM unnest($2::text[], $3::bigint[], $4::date[], $5::text[], $6::text[]) AS n(tipo, monto, fecha, clave, descripcion)
+     ),
+     borrados AS (
+       DELETE FROM prestamo_cargos WHERE prestamo_id = $1 AND NOT (clave = ANY($5::text[]))
+     ),
+     cargos AS (
+       INSERT INTO prestamo_cargos (prestamo_id, tipo, monto, fecha, clave, descripcion)
+       SELECT $1, tipo, monto, fecha, clave, descripcion FROM nuevos
+       ON CONFLICT (prestamo_id, clave) DO UPDATE
+          SET tipo = EXCLUDED.tipo, monto = EXCLUDED.monto, fecha = EXCLUDED.fecha, descripcion = EXCLUDED.descripcion
+        WHERE (prestamo_cargos.tipo, prestamo_cargos.monto, prestamo_cargos.fecha, prestamo_cargos.descripcion)
+              IS DISTINCT FROM (EXCLUDED.tipo, EXCLUDED.monto, EXCLUDED.fecha, EXCLUDED.descripcion)
+     ),
+     aplicados AS (
+       UPDATE pagos SET aplicado_recargo = u.rec, aplicado_interes = u.int, aplicado_capital = u.cap, sobrante = u.sob
+         FROM unnest($7::uuid[], $8::bigint[], $9::bigint[], $10::bigint[], $11::bigint[]) AS u(id, rec, int, cap, sob)
+        WHERE pagos.id = u.id
+          AND (pagos.aplicado_recargo, pagos.aplicado_interes, pagos.aplicado_capital, pagos.sobrante)
+              IS DISTINCT FROM (u.rec, u.int, u.cap, u.sob)
+     )
+     UPDATE prestamos
+        SET estado = $12, total_cargado = $13, total_pagado = $14, saldo_capital = $15, saldo_interes = $16, saldo_recargo = $17,
+            atraso = $18, dias_atraso = $19, sugerido_hoy = $20, proximo_corte = $21, procesado_hasta = $22, pagado_en = $23
+      WHERE id = $1
+      RETURNING *`,
+    [
+      prestamoId,
+      r.cargos.map((c) => c.tipo), r.cargos.map((c) => c.monto), r.cargos.map((c) => c.fecha), r.cargos.map((c) => c.clave), r.cargos.map((c) => c.descripcion ?? null),
+      pagos.map((x) => x.id), a.map((x) => x.recargo), a.map((x) => x.interes), a.map((x) => x.capital), a.map((x) => x.sobrante),
+      r.estado, r.totalCargado, r.totalPagado, r.saldos.capital, r.saldos.interes, r.saldos.recargo,
+      r.atraso, r.diasAtraso, r.sugeridoHoy, r.proximoCorte, hoy, r.fechaPagado,
+    ]
+  );
+  return rows[0];
+}
+
+/**
+ * Recalcula cargos, aplicación de pagos y saldos de un préstamo hasta `hoy` (2 consultas).
  * Debe llamarse dentro de una transacción; bloquea la fila del préstamo.
  */
 export async function recalcular(db, prestamoId, hoy = hoyBogota()) {
-  const { rows } = await db.query(`SELECT * FROM prestamos WHERE id = $1 FOR UPDATE`, [prestamoId]);
-  const p = rows[0];
+  const p = await cargarParaCalcular(db, prestamoId);
   if (!p || p.estado === "anulado") return p;
-
-  const { rows: pagos } = await db.query(
-    `SELECT id, monto, fecha, creado_en FROM pagos
-      WHERE prestamo_id = $1 AND anulado_en IS NULL ORDER BY fecha, creado_en`,
-    [prestamoId]
-  );
-  const r = simular({
-    prestamo: condiciones(p),
-    pagos: pagos.map((x) => ({ id: x.id, monto: x.monto, fecha: x.fecha, orden: x.creado_en.toISOString() })),
-    hasta: hoy,
-  });
-
-  await db.query(`DELETE FROM prestamo_cargos WHERE prestamo_id = $1`, [prestamoId]);
-  if (r.cargos.length) {
-    await db.query(
-      `INSERT INTO prestamo_cargos (prestamo_id, tipo, monto, fecha, clave, descripcion)
-       SELECT $1, * FROM unnest($2::text[], $3::bigint[], $4::date[], $5::text[], $6::text[])`,
-      [prestamoId, r.cargos.map((c) => c.tipo), r.cargos.map((c) => c.monto), r.cargos.map((c) => c.fecha), r.cargos.map((c) => c.clave), r.cargos.map((c) => c.descripcion ?? null)]
-    );
-  }
-  if (pagos.length) {
-    const a = pagos.map((x) => r.aplicaciones[x.id] ?? { recargo: 0, interes: 0, capital: 0, sobrante: x.monto });
-    await db.query(
-      `UPDATE pagos SET aplicado_recargo = u.rec, aplicado_interes = u.int, aplicado_capital = u.cap, sobrante = u.sob
-         FROM unnest($1::uuid[], $2::bigint[], $3::bigint[], $4::bigint[], $5::bigint[]) AS u(id, rec, int, cap, sob)
-        WHERE pagos.id = u.id`,
-      [pagos.map((x) => x.id), a.map((x) => x.recargo), a.map((x) => x.interes), a.map((x) => x.capital), a.map((x) => x.sobrante)]
-    );
-  }
-  const { rows: act } = await db.query(
-    `UPDATE prestamos
-        SET estado = $2, total_cargado = $3, total_pagado = $4, saldo_capital = $5, saldo_interes = $6, saldo_recargo = $7,
-            atraso = $8, dias_atraso = $9, sugerido_hoy = $10, proximo_corte = $11, procesado_hasta = $12, pagado_en = $13
-      WHERE id = $1
-      RETURNING *`,
-    [prestamoId, r.estado, r.totalCargado, r.totalPagado, r.saldos.capital, r.saldos.interes, r.saldos.recargo,
-     r.atraso, r.diasAtraso, r.sugeridoHoy, r.proximoCorte, hoy, r.fechaPagado]
-  );
-  return act[0];
+  return guardarCalculo(db, prestamoId, calcular(p, p.pagos_validos, hoy), p.pagos_validos, hoy);
 }
 
 /** Recalcula los préstamos activos que no se han procesado hoy (cron diario y pantallas). */
