@@ -7,17 +7,20 @@ import { sumarDias } from "@/lib/fechas";
 import { VistaCaja } from "@/components/negocio/VistaCaja";
 import { CargandoDatos } from "@/components/offline/CargandoDatos";
 import { BotonGasto } from "./BotonGasto";
+import { BotonCapital } from "./BotonCapital";
 import { CierreDia } from "./CierreDia";
 
-export function CajaLocal({ usuarioId, esCobrador }) {
+export function CajaLocal({ usuarioId, rol }) {
   const vista = useVista();
   const caja = cajaDe(vista, usuarioId);
   if (!caja) return <CargandoDatos />;
+  const esCobrador = rol === "cobrador";
   return (
     <>
       <VistaCaja
         caja={caja}
         propia
+        rol={rol}
         titulo="Mi caja"
         navegacion={
           <>
@@ -32,7 +35,14 @@ export function CajaLocal({ usuarioId, esCobrador }) {
             )}
           </>
         }
-        accion={caja.cerrada ? null : <BotonGasto />}
+        accion={
+          caja.cerrada ? null : (
+            <div className="flex flex-wrap gap-2">
+              {rol === "dueno" && <BotonCapital />}
+              <BotonGasto />
+            </div>
+          )
+        }
       />
       {esCobrador && <CierreDia />}
     </>

@@ -160,6 +160,14 @@ export const gastoSchema = z.object({
   creado_en_dispositivo: z.iso.datetime({ offset: true }).optional(),
 });
 
+export const capitalSchema = z.object({
+  id: z.uuid().optional(),
+  monto: pesos(1_000, 100_000_000_000, "El capital"),
+  metodo: z.enum(IDS_METODOS_PAGO).default("efectivo"),
+  descripcion: opcional(200),
+  creado_en_dispositivo: z.iso.datetime({ offset: true }).optional(),
+});
+
 export const baseSchema = z.object({
   id: z.uuid().optional(),
   cobrador_id: z.uuid(),

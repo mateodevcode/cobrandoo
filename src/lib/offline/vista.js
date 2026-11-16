@@ -151,6 +151,8 @@ export function cajaDe(vista, usuarioId) {
     const comun = { id: `local-${op.id}`, creado_en: op.creado_en, pendiente: true };
     if (op.tipo === "pago") {
       extra.push({ ...comun, tipo: "cobro", metodo: op.body.metodo, monto: op.body.monto, cliente_nombre: vista.clientes.get(op.local.cliente_id)?.nombre });
+    } else if (op.tipo === "capital") {
+      extra.push({ ...comun, tipo: "base", metodo: op.body.metodo, monto: op.body.monto, categoria: null, descripcion: op.body.descripcion || "Aporte de capital" });
     } else if (op.tipo === "gasto") {
       extra.push({ ...comun, tipo: "gasto", metodo: op.body.metodo, monto: -op.body.monto, categoria: op.body.categoria, descripcion: op.body.descripcion });
     } else if (op.tipo === "prestamo" && op.body.registrar_desembolso !== false) {

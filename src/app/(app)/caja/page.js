@@ -25,7 +25,7 @@ export default async function PaginaCaja({ searchParams }) {
     return (
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
         <Suspense>
-          <CajaLocal usuarioId={yo.id} esCobrador={yo.rol === "cobrador"} />
+          <CajaLocal usuarioId={yo.id} rol={yo.rol} />
         </Suspense>
       </div>
     );

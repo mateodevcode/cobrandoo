@@ -92,10 +92,14 @@ export async function registrarGasto(yo, d, ip) {
 export async function entregarBase(yo, d, ip) {
   if (yo.rol === "cobrador") throw new ErrorApp(403, "Solo un jefe puede entregar base", "prohibido");
   if (d.cobrador_id === yo.id) throw new ErrorApp(400, "No puedes entregarte base a ti mismo", "base_invalida");
-  const { rows } = await query(`SELECT id, organizacion_id, rol, nombre FROM usuarios WHERE id = $1`, [d.cobrador_id]);
+  const { rows } = await query(`SELECT id, organizacion_id, rol, nombre, estado, eliminado_en FROM usuarios WHERE id = $1`, [d.cobrador_id]);
   const cob = rows[0];
   if (!cob) throw new ErrorApp(404, "Cobrador no encontrado", "no_encontrado");
   await exigirVisible(yo, cob.id, cob.organizacion_id);
+  // El dinero baja por la jerarquía: a supervisores y cobradores activos (nunca a otro dueño)
+  if (!["supervisor", "cobrador"].includes(cob.rol) || cob.estado !== "activo" || cob.eliminado_en) {
+    throw new ErrorApp(400, "Solo se entrega dinero a supervisores o cobradores activos", "destino_invalido");
+  }
   const fecha = fechaDeOperacion(d.creado_en_dispositivo);
 
   return transaccion(async (db) => {
@@ -113,6 +117,26 @@ export async function entregarBase(yo, d, ip) {
       await auditoria.registrar(db, { organizacionId: yo.org, usuarioId: yo.id, accion: "caja.base", entidad: "movimiento", entidadId: r.id, datos: { cobrador: cob.id, monto: d.monto }, ip });
     }
     return { ...r, cobradorId: cob.id, cobradorNombre: cob.nombre };
+  });
+}
+
+/**
+ * El dueño registra el capital que mete al negocio (entra a su caja). Con eso su caja refleja
+ * cuánto puso y cuánto ha repartido, en vez de quedar en negativo al entregar dinero.
+ */
+export async function registrarCapital(yo, d, ip) {
+  if (yo.rol !== "dueno") throw new ErrorApp(403, "Solo el dueño registra capital", "prohibido");
+  const fecha = fechaDeOperacion(d.creado_en_dispositivo);
+  return transaccion(async (db) => {
+    const r = await registrarMovimiento(db, {
+      id: d.id, organizacionId: yo.org, usuarioId: yo.id, tipo: "base", metodo: d.metodo, monto: d.monto, fecha,
+      categoria: "capital", descripcion: d.descripcion || "Aporte de capital", creadoPor: yo.id,
+      creadoEnDispositivo: d.creado_en_dispositivo,
+    });
+    if (!r.duplicado) {
+      await auditoria.registrar(db, { organizacionId: yo.org, usuarioId: yo.id, accion: "caja.capital", entidad: "movimiento", entidadId: r.id, datos: { monto: d.monto }, ip });
+    }
+    return r;
   });
 }
 

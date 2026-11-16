@@ -64,7 +64,7 @@ export default async function PaginaEquipo() {
                 <Mini titulo="Efectivo" valor={u.efectivo} fuerte />
               </dl>
               <div className="flex flex-wrap gap-2">
-                {u.rol === "cobrador" && u.jornada_estado !== "cerrada" && <BotonBase cobrador={{ id: u.id, nombre: u.nombre }} />}
+                {u.jornada_estado !== "cerrada" && <BotonBase cobrador={{ id: u.id, nombre: u.nombre, rol: u.rol }} />}
                 <Link href={`/caja?usuario=${u.id}`} className="inline-flex h-8 items-center rounded-xl border border-borde px-3 text-xs font-semibold hover:bg-fondo">
                   Ver caja
                 </Link>

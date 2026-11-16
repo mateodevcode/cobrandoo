@@ -17,7 +17,7 @@ const NOMBRE_TIPO = {
 const NOMBRE_CATEGORIA = Object.fromEntries(CATEGORIAS_GASTO.map((c) => [c.id, c.nombre]));
 
 /** Presentación de una caja (sirve para la del servidor y para la calculada en el teléfono). */
-export function VistaCaja({ caja, titulo, navegacion, accion, propia }) {
+export function VistaCaja({ caja, titulo, navegacion, accion, propia, rol }) {
   const t = caja.totales;
   return (
     <>
@@ -39,7 +39,11 @@ export function VistaCaja({ caja, titulo, navegacion, accion, propia }) {
         </p>
         {caja.efectivoEsperado < 0 && !caja.cerrada && (
           <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm">
-            La caja está en negativo: se prestó más efectivo del que había. {propia ? "Pídele la base del día a tu jefe." : "Entrégale la base del día."}
+            {rol === "dueno"
+              ? "La caja está en negativo: repartiste o prestaste más de lo registrado. Anota el dinero que pusiste con “Registrar capital”."
+              : propia
+                ? `La caja está en negativo: se prestó o entregó más efectivo del que había. Pídele dinero a tu jefe${rol === "supervisor" ? " (lo entrega desde Equipo)" : ""}.`
+                : "La caja está en negativo: entrégale dinero desde Equipo."}
           </p>
         )}
         {caja.digital !== 0 && (
@@ -50,7 +54,7 @@ export function VistaCaja({ caja, titulo, navegacion, accion, propia }) {
       </section>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Cifra titulo="Base recibida" valor={t.base} />
+        <Cifra titulo={rol === "dueno" ? "Capital y base" : "Base recibida"} valor={t.base} />
         <Cifra titulo="Cobros" valor={t.cobro + t.anulacion} positivo />
         <Cifra titulo="Prestado" valor={t.desembolso} />
         <Cifra titulo="Gastos" valor={t.gasto} />
@@ -69,9 +73,9 @@ export function VistaCaja({ caja, titulo, navegacion, accion, propia }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">
-                    {NOMBRE_TIPO[m.tipo]}
+                    {m.categoria === "capital" ? "Aporte de capital" : NOMBRE_TIPO[m.tipo]}
                     {m.cliente_nombre && ` · ${m.cliente_nombre}`}
-                    {m.categoria && ` · ${NOMBRE_CATEGORIA[m.categoria] ?? m.categoria}`}
+                    {m.categoria && m.categoria !== "capital" && ` · ${NOMBRE_CATEGORIA[m.categoria] ?? m.categoria}`}
                   </p>
                   <p className="truncate text-xs text-suave">
                     {new Date(m.creado_en).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", timeZone: "America/Bogota" })} · {NOMBRE_METODO_PAGO[m.metodo]}

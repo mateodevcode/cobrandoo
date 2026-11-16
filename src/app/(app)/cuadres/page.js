@@ -10,7 +10,9 @@ export const metadata = { title: "Cuadres" };
 export default async function PaginaCuadres({ searchParams }) {
   const yo = await exigirUsuarioPagina(["dueno", "supervisor"]);
   const { vista = "abiertos" } = await searchParams;
-  const estado = { abiertos: "abiertos", pendientes: "pendiente", fallos: "con_fallo", todos: undefined }[vista] ?? "abiertos";
+  // "todos" = historial completo (sin filtro de estado); una vista desconocida cae en "por atender"
+  const FILTRO = { abiertos: "abiertos", pendientes: "pendiente", fallos: "con_fallo", todos: null };
+  const estado = vista in FILTRO ? FILTRO[vista] ?? undefined : "abiertos";
   const lista = await cierres.listar(yo, { estado });
   const pendientes = lista.filter((c) => c.estado === "pendiente").length;
 

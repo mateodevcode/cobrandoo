@@ -49,9 +49,18 @@ export function BotonBase({ cobrador }) {
   return (
     <>
       <Boton tamano="sm" className="h-8 text-xs" onClick={() => setAbierta(true)}>
-        Entregar base
+        {cobrador.rol === "supervisor" ? "Entregar dinero" : "Entregar base"}
       </Boton>
-      <Hoja abierta={abierta} onCerrar={() => setAbierta(false)} titulo={`Entregar base a ${cobrador.nombre}`} descripcion="Queda en su caja de hoy y la debe cuadrar al cerrar el día.">
+      <Hoja
+        abierta={abierta}
+        onCerrar={() => setAbierta(false)}
+        titulo={`Entregar ${cobrador.rol === "supervisor" ? "dinero" : "base"} a ${cobrador.nombre}`}
+        descripcion={
+          cobrador.rol === "supervisor"
+            ? "Sale de tu caja y entra a la suya, para que reparta la base a sus cobradores o preste."
+            : "Sale de tu caja y queda en la suya de hoy; la debe cuadrar al cerrar el día."
+        }
+      >
         <form onSubmit={enviar} className="flex flex-col gap-4">
           <CampoDinero etiqueta="Valor" valor={monto} onCambio={setMonto} grande autoFocus error={error} />
           <Chips etiqueta="Entregado en" opciones={METODOS_PAGO} valor={metodo} onCambio={setMetodo} />
