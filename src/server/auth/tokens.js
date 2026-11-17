@@ -37,7 +37,7 @@ export async function verificarAcceso(token) {
       audience: AUDIENCE,
       algorithms: ["HS256"],
     });
-    return { id: payload.sub, rol: payload.rol, org: payload.org ?? null, nombre: payload.nombre };
+    return { id: payload.sub, rol: payload.rol, org: payload.org ?? null, nombre: payload.nombre, iat: payload.iat };
   } catch {
     return null;
   }

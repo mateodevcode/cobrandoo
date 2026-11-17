@@ -1,5 +1,5 @@
 import "server-only";
-import { transaccion } from "../db";
+import { query, transaccion } from "../db";
 import { ErrorApp } from "../http";
 import { JEFES_PERMITIDOS } from "@/lib/roles";
 import { hashPassword } from "./auth.service";
@@ -89,6 +89,7 @@ export async function actualizarUsuario(admin, id, cambios, ip) {
 
     // Cambio de clave o desactivación => cerrar sus sesiones abiertas
     if (password || (cambios.estado && cambios.estado !== "activo")) {
+      await db.query(`UPDATE usuarios SET sesiones_desde = now() WHERE id = $1`, [id]);
       await sesionesRepo.revocarDeUsuario(db, id);
       olvidarVigencia(id);
     }
@@ -104,6 +105,37 @@ export async function actualizarUsuario(admin, id, cambios, ip) {
       ip,
     });
     return usuariosRepo.buscarPorId(id, db);
+  });
+}
+
+/** Personas de la organización a las que el dueño puede cambiarles la contraseña (incluye otros dueños y él mismo). */
+export async function personasConAcceso(yo) {
+  if (yo.rol !== "dueno") throw new ErrorApp(403, "Solo el dueño gestiona contraseñas", "prohibido");
+  const { rows } = await query(
+    `SELECT id, nombre, email, rol, estado FROM usuarios
+      WHERE organizacion_id = $1 AND eliminado_en IS NULL AND rol <> 'super_admin'
+      ORDER BY array_position(ARRAY['dueno','supervisor','cobrador'], rol::text), nombre`,
+    [yo.org]
+  );
+  return rows;
+}
+
+/**
+ * Por seguridad nadie cambia ni recupera su propia contraseña por su cuenta: solo el super admin
+ * (desde Organizaciones) o un dueño de la misma organización. Cierra las sesiones abiertas de esa persona.
+ */
+export async function cambiarClaveComoDueno(yo, id, password, ip) {
+  if (yo.rol !== "dueno") throw new ErrorApp(403, "Solo el dueño cambia contraseñas", "prohibido");
+  return transaccion(async (db) => {
+    const { rows } = await db.query(`SELECT id, organizacion_id, rol, nombre, eliminado_en FROM usuarios WHERE id = $1`, [id]);
+    const u = rows[0];
+    if (!u || u.organizacion_id !== yo.org || u.eliminado_en || u.rol === "super_admin") throw new ErrorApp(404, "Persona no encontrada", "no_encontrado");
+    await usuariosRepo.actualizar(db, id, { password_hash: await hashPassword(password) });
+    await db.query(`UPDATE usuarios SET sesiones_desde = now() WHERE id = $1`, [id]);
+    await sesionesRepo.revocarDeUsuario(db, id);
+    olvidarVigencia(id);
+    await auditoria.registrar(db, { organizacionId: yo.org, usuarioId: yo.id, accion: "usuario.clave", entidad: "usuario", entidadId: id, datos: { password: "cambiada" }, ip });
+    return { id, nombre: u.nombre, propia: id === yo.id };
   });
 }
 

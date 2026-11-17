@@ -13,17 +13,19 @@ const vigencia = new Map();
 
 async function sigueVigente(u) {
   const c = vigencia.get(u.id);
-  if (c && c.hasta > Date.now()) return c.ok;
+  const valeToken = (v) => v.ok && (!v.desde || (u.iat ?? 0) >= v.desde);
+  if (c && c.hasta > Date.now()) return valeToken(c);
   const { rows } = await query(
-    `SELECT u.estado = 'activo' AND u.eliminado_en IS NULL AND COALESCE(o.activa, true) AS ok
+    `SELECT u.estado = 'activo' AND u.eliminado_en IS NULL AND COALESCE(o.activa, true) AS ok,
+            floor(extract(epoch FROM u.sesiones_desde))::bigint AS desde
        FROM usuarios u LEFT JOIN organizaciones o ON o.id = u.organizacion_id
       WHERE u.id = $1`,
     [u.id]
   );
-  const ok = !!rows[0]?.ok;
-  vigencia.set(u.id, { ok, hasta: Date.now() + VIGENCIA_MS });
+  const v = { ok: !!rows[0]?.ok, desde: rows[0]?.desde ? Number(rows[0].desde) : null, hasta: Date.now() + VIGENCIA_MS };
+  vigencia.set(u.id, v);
   if (vigencia.size > 10_000) vigencia.clear();
-  return ok;
+  return valeToken(v);
 }
 
 /** Olvida lo recordado (al eliminar o desactivar personas u organizaciones). Sin id: todo. */

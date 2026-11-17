@@ -1,16 +1,20 @@
 import Link from "next/link";
+import { ArrowRightLeft } from "lucide-react";
 import { exigirUsuarioPagina } from "@/server/auth/session";
 import { equipoHoy } from "@/server/services/caja.service";
 import { Avatar, Insignia } from "@/components/ui/Insignia";
 import { NOMBRE_ROL } from "@/lib/roles";
 import { dinero } from "@/lib/formato";
 import { BotonBase } from "./BotonBase";
+import { CambiarClaves } from "./CambiarClaves";
+import { personasConAcceso } from "@/server/services/admin.service";
 
 export const metadata = { title: "Equipo" };
 
 export default async function PaginaEquipo() {
   const yo = await exigirUsuarioPagina(["dueno", "supervisor"]);
   const equipo = await equipoHoy(yo);
+  const personas = yo.rol === "dueno" ? await personasConAcceso(yo) : null;
   const totales = equipo.reduce(
     (t, u) => ({ cobrado: t.cobrado + u.cobrado, prestado: t.prestado + u.prestado, efectivo: t.efectivo + u.efectivo, pendiente: t.pendiente + u.pendiente }),
     { cobrado: 0, prestado: 0, efectivo: 0, pendiente: 0 }
@@ -18,9 +22,17 @@ export default async function PaginaEquipo() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
-      <header>
-        <h1 className="text-2xl font-bold">Equipo</h1>
-        <p className="text-sm text-suave">Cómo va cada persona a cargo hoy.</p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Equipo</h1>
+          <p className="text-sm text-suave">Cómo va cada persona a cargo hoy.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/equipo/asignar" className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primario px-3 text-sm font-semibold text-white hover:opacity-90">
+            <ArrowRightLeft className="size-4" /> Asignar clientes
+          </Link>
+          {personas && <CambiarClaves personas={personas} yoId={yo.id} />}
+        </div>
       </header>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -64,7 +76,7 @@ export default async function PaginaEquipo() {
                 <Mini titulo="Efectivo" valor={u.efectivo} fuerte />
               </dl>
               <div className="flex flex-wrap gap-2">
-                {u.jornada_estado !== "cerrada" && <BotonBase cobrador={{ id: u.id, nombre: u.nombre, rol: u.rol }} />}
+                <BotonBase cobrador={{ id: u.id, nombre: u.nombre, rol: u.rol }} />
                 <Link href={`/caja?usuario=${u.id}`} className="inline-flex h-8 items-center rounded-xl border border-borde px-3 text-xs font-semibold hover:bg-fondo">
                   Ver caja
                 </Link>
