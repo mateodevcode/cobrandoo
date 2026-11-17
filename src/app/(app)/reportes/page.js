@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { exigirUsuarioPagina } from "@/server/auth/session";
 import { reporte } from "@/server/services/reportes.service";
 import { Filtros } from "@/components/negocio/Filtros";
@@ -27,9 +28,17 @@ export default async function PaginaReportes({ searchParams }) {
             {yo.rol === "dueno" ? "Todo el negocio" : "Tu equipo"} · del {fecha(r.desde)} al {fecha(r.hoy)}
           </p>
         </div>
-        <Suspense>
-          <Filtros parametro="dias" opciones={[{ id: "30", nombre: "30 días" }, { id: "7", nombre: "7 días" }, { id: "90", nombre: "90 días" }]} />
-        </Suspense>
+        <div className="flex flex-wrap items-center gap-2">
+          <Suspense>
+            <Filtros parametro="dias" opciones={[{ id: "30", nombre: "30 días" }, { id: "7", nombre: "7 días" }, { id: "90", nombre: "90 días" }]} />
+          </Suspense>
+          <a href={`/api/reportes/exportar?formato=xlsx&dias=${dias}`} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-borde bg-superficie px-3 text-sm font-semibold hover:bg-fondo">
+            <FileSpreadsheet className="size-4 text-exito" /> Excel
+          </a>
+          <a href={`/api/reportes/exportar?formato=pdf&dias=${dias}`} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-borde bg-superficie px-3 text-sm font-semibold hover:bg-fondo">
+            <FileText className="size-4 text-peligro" /> PDF
+          </a>
+        </div>
       </header>
 
       {/* ===== ¿Dónde está el dinero? ===== */}

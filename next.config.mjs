@@ -4,7 +4,7 @@ const nextConfig = {
   cacheComponents: false,
   poweredByHeader: false,
   // Librerías de Node que se usan tal cual en el servidor (no se empaquetan)
-  serverExternalPackages: ["web-push", "pg"],
+  serverExternalPackages: ["web-push", "pg", "pdfkit", "exceljs"],
   turbopack: {
     rules: {
       "*.css": {
