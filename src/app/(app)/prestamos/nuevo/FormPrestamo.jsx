@@ -14,11 +14,13 @@ import { BASES_INTERES, FRECUENCIAS, METODOS_PAGO, RECARGOS, TASA_POR_DEFECTO, D
 import { diasEntre } from "@/lib/fechas";
 import { dinero, fecha } from "@/lib/formato";
 import { sincronizador } from "@/lib/offline/sync";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 const MIN_CAPITAL = 10_000;
 
-export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
+/** @param renovar  { id, saldo } del préstamo que se renueva (su saldo se descuenta de lo que se entrega) */
+export function FormPrestamo({ cliente: clienteInicial, clientes, hoy, renovar = null }) {
   const router = useRouter();
   const [cliente, setCliente] = useState(clienteInicial);
   const [busqueda, setBusqueda] = useState("");
@@ -57,11 +59,14 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
     return (q ? clientes.filter((c) => c.nombre.toLowerCase().includes(q) || c.barrio?.toLowerCase().includes(q)) : clientes).slice(0, 30);
   }, [busqueda, clientes]);
 
+  const recibe = plan && renovar ? plan.entregado - renovar.saldo : null;
+
   async function enviar(e) {
     e.preventDefault();
     if (!cliente) return toast.error("Elige el cliente");
     setEnviando(true);
     setErrores({});
+    if (renovar) return enviarRenovacion();
     // Se guarda en el teléfono y se envía; con señal esperamos la respuesta para mostrar errores aquí
     const r = await sincronizador.encolarYEsperar({
       id: idPrestamo,
@@ -101,6 +106,43 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
     } else {
       toast.success("Préstamo guardado en el teléfono", { description: "Se enviará solo cuando haya señal. Ya aparece en tu ruta." });
       router.push("/ruta");
+    }
+  }
+
+  async function enviarRenovacion() {
+    if (!navigator.onLine) {
+      setEnviando(false);
+      return toast.error("Para renovar necesitas internet", { description: "El saldo exacto que se descuenta lo calcula el servidor." });
+    }
+    try {
+      await api("/api/prestamos", {
+        method: "POST",
+        body: {
+          id: idPrestamo,
+          cliente_id: cliente.id,
+          renueva_a: renovar.id,
+          metodo,
+          capital,
+          tasa: Number(tasa),
+          base_interes: base,
+          frecuencia: m.usaCuotas ? frecuencia : null,
+          n_cuotas: m.usaCuotas ? Number(nCuotas) : null,
+          recargo_tipo: m.usaRecargo ? recargoTipo : "ninguno",
+          recargo_valor: m.usaRecargo && recargoTipo !== "ninguno" ? Number(recargoValor) : 0,
+          metodo_desembolso: desembolso,
+          fecha_inicio: hoy,
+          registrar_desembolso: true,
+          notas,
+          creado_en_dispositivo: new Date().toISOString(),
+        },
+      });
+      toast.success("Préstamo renovado", { description: "El anterior quedó saldado." });
+      sincronizador.sincronizar();
+      router.push(`/prestamos/${idPrestamo}`);
+      router.refresh();
+    } catch (err) {
+      toast.error(err.message);
+      setEnviando(false);
     }
   }
 
@@ -270,13 +312,13 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
         {/* Entrega */}
         <Seccion titulo="Entrega del dinero">
           <Chips etiqueta="¿Cómo se lo entregas?" opciones={METODOS_PAGO} valor={desembolso} onCambio={setDesembolso} />
-          <label className="mt-4 flex items-start gap-3 rounded-xl bg-fondo p-3 text-sm">
+          {!renovar && (<label className="mt-4 flex items-start gap-3 rounded-xl bg-fondo p-3 text-sm">
             <input type="checkbox" checked={existente} onChange={(e) => setExistente(e.target.checked)} className="mt-0.5 size-4 accent-primario" />
             <span>
               <span className="font-semibold">Es un préstamo que ya existía</span>
               <span className="block text-xs text-suave">Para pasar al sistema préstamos hechos antes. No descuenta dinero de tu caja de hoy.</span>
             </span>
-          </label>
+          </label>)}
           {existente && (
             <Campo etiqueta="Fecha en que se prestó" type="date" max={hoy} value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="mt-3 max-w-xs" error={errores.fecha_inicio} />
           )}
@@ -286,7 +328,19 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
 
       {/* Resumen */}
       <aside className="tarjeta flex flex-col gap-4 p-5 lg:sticky lg:top-6">
-        <h2 className="font-semibold">Resumen</h2>
+        <h2 className="font-semibold">{renovar ? "Renovación" : "Resumen"}</h2>
+        {renovar && (
+          <div className="rounded-xl bg-primario-suave p-3 text-sm text-primario">
+            <p>
+              Hoy debe <span className="tabular font-bold">{dinero(renovar.saldo)}</span>. Ese saldo se descuenta y el préstamo anterior queda pagado.
+            </p>
+            {recibe != null && (
+              <p className={cn("mt-1 font-semibold", recibe < 0 && "text-peligro")}>
+                {recibe < 0 ? `El monto debe ser al menos ${dinero(renovar.saldo)}` : `El cliente recibe en mano: ${dinero(recibe)}`}
+              </p>
+            )}
+          </div>
+        )}
         {!plan ? (
           <p className="text-sm text-suave">Escribe el monto para ver el cálculo.</p>
         ) : (
@@ -321,8 +375,8 @@ export function FormPrestamo({ cliente: clienteInicial, clientes, hoy }) {
             )}
           </>
         )}
-        <Boton type="submit" tamano="lg" cargando={enviando} disabled={!plan || !cliente}>
-          Crear préstamo
+        <Boton type="submit" tamano="lg" cargando={enviando} disabled={!plan || !cliente || (recibe != null && recibe < 0)}>
+          {renovar ? "Renovar préstamo" : "Crear préstamo"}
         </Boton>
       </aside>
     </form>

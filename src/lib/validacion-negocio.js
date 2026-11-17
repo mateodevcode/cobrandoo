@@ -100,6 +100,7 @@ export const prestamoSchema = z
     metodo_desembolso: z.enum(IDS_METODOS_PAGO).default("efectivo"),
     fecha_inicio: fecha.optional(),
     registrar_desembolso: z.boolean().default(true),
+    renueva_a: z.uuid().nullish(),
     notas: opcional(500),
     creado_en_dispositivo: z.iso.datetime({ offset: true }).optional(),
   })

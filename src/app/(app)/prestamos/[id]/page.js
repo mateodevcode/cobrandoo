@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { z } from "zod";
 import { exigirUsuarioPagina } from "@/server/auth/session";
 import { ROLES_NEGOCIO } from "@/server/permisos";
@@ -57,8 +57,37 @@ export default async function PaginaPrestamo({ params }) {
             {esJefe && ` · ${p.cobrador_nombre}`}
           </p>
         </div>
-        {p.estado === "activo" && <BotonCobrar clienteId={p.cliente_id} cliente={p.cliente_nombre} prestamos={[{ id: p.id, metodo: p.metodo, saldo: p.saldo, sugerido_hoy: p.sugerido_hoy, valor_cuota: p.valor_cuota }]} />}
+        {p.estado === "activo" && (
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/prestamos/nuevo?cliente=${p.cliente_id}&renueva=${p.id}`}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-borde px-4 text-sm font-semibold hover:bg-fondo"
+            >
+              <RefreshCw className="size-4" /> Renovar
+            </Link>
+            <BotonCobrar clienteId={p.cliente_id} cliente={p.cliente_nombre} prestamos={[{ id: p.id, metodo: p.metodo, saldo: p.saldo, sugerido_hoy: p.sugerido_hoy, valor_cuota: p.valor_cuota }]} />
+          </div>
+        )}
       </header>
+
+      {p.renueva_a && (
+        <p className="rounded-xl bg-primario-suave p-3 text-sm text-primario">
+          Es una renovación: se descontaron <span className="tabular font-semibold">{dinero(p.saldo_renovado)}</span> que debía del{" "}
+          <Link href={`/prestamos/${p.renueva_a}`} className="font-semibold underline">
+            préstamo anterior
+          </Link>
+          {p.saldo_renovado > 0 && <>; en mano recibió {dinero(p.monto_entregado - p.saldo_renovado)}</>}.
+        </p>
+      )}
+      {p.renovado_por && (
+        <p className="rounded-xl bg-exito-suave p-3 text-sm text-exito">
+          Se saldó al renovarlo con un{" "}
+          <Link href={`/prestamos/${p.renovado_por}`} className="font-semibold underline">
+            préstamo nuevo
+          </Link>
+          .
+        </p>
+      )}
 
       {p.estado === "anulado" && (
         <p className="rounded-xl bg-fondo p-3 text-sm text-suave">
@@ -133,7 +162,8 @@ export default async function PaginaPrestamo({ params }) {
           ) : (
             <ul className="divide-y divide-borde">
               {pagos.map((x) => {
-                const puedeAnular = !x.anulado_en && (esJefe || (x.cobrador_id === yo.id && x.fecha === hoy));
+                // El saldo pagado por renovación se deshace anulando el préstamo nuevo, no aquí
+                const puedeAnular = !x.anulado_en && x.metodo !== "renovacion" && (esJefe || (x.cobrador_id === yo.id && x.fecha === hoy));
                 return (
                   <li key={x.id} className={cn("py-2.5", x.anulado_en && "opacity-55")}>
                     <div className="flex items-center justify-between gap-2">

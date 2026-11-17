@@ -30,12 +30,12 @@ export async function reporte(yo, dias = 30) {
               COALESCE(sum(pg.aplicado_interes + pg.aplicado_recargo), 0)::bigint AS ganancia_cobrada,
               count(*)::int AS abonos
          FROM pagos pg
-        WHERE ${fG} AND pg.anulado_en IS NULL AND pg.fecha BETWEEN $${pG.length + 1} AND $${pG.length + 2}`,
+        WHERE ${fG} AND pg.anulado_en IS NULL AND pg.metodo <> 'renovacion' AND pg.fecha BETWEEN $${pG.length + 1} AND $${pG.length + 2}`,
       [...pG, desde, hoy]
     ),
     // Préstamos nuevos del período (lo que salió de caja y el interés descontado al entregar)
     query(
-      `SELECT COALESCE(sum(p.monto_entregado), 0)::bigint AS entregado,
+      `SELECT COALESCE(sum(p.monto_entregado - p.saldo_renovado), 0)::bigint AS entregado,
               COALESCE(sum(p.capital - p.monto_entregado), 0)::bigint AS descontado,
               count(*)::int AS prestamos,
               count(DISTINCT p.cliente_id)::int AS clientes
@@ -46,8 +46,8 @@ export async function reporte(yo, dias = 30) {
     // Cobrado y prestado por día
     query(
       `SELECT d::date::text AS fecha,
-              COALESCE((SELECT sum(pg.monto) FROM pagos pg WHERE ${fG} AND pg.anulado_en IS NULL AND pg.fecha = d::date), 0)::bigint AS cobrado,
-              COALESCE((SELECT sum(p.monto_entregado) FROM prestamos p WHERE ${desplazar(fP, pG.length)} AND p.estado <> 'anulado' AND p.fecha_inicio = d::date), 0)::bigint AS prestado
+              COALESCE((SELECT sum(pg.monto) FROM pagos pg WHERE ${fG} AND pg.anulado_en IS NULL AND pg.metodo <> 'renovacion' AND pg.fecha = d::date), 0)::bigint AS cobrado,
+              COALESCE((SELECT sum(p.monto_entregado - p.saldo_renovado) FROM prestamos p WHERE ${desplazar(fP, pG.length)} AND p.estado <> 'anulado' AND p.fecha_inicio = d::date), 0)::bigint AS prestado
          FROM generate_series($${pG.length + pP.length + 1}::date, $${pG.length + pP.length + 2}::date, interval '1 day') d
         ORDER BY d`,
       [...pG, ...pP, desde, hoy]
@@ -72,8 +72,8 @@ export async function reporte(yo, dias = 30) {
               COALESCE((SELECT sum(p.saldo_capital) FROM prestamos p WHERE p.cobrador_id = u.id AND p.estado = 'activo'), 0)::bigint AS capital_prestado,
               COALESCE((SELECT sum(p.saldo) FROM prestamos p WHERE p.cobrador_id = u.id AND p.estado = 'activo'), 0)::bigint AS cartera,
               COALESCE((SELECT sum(p.saldo) FROM prestamos p WHERE p.cobrador_id = u.id AND p.estado = 'activo' AND p.dias_atraso > 0), 0)::bigint AS en_mora,
-              COALESCE((SELECT sum(pg.monto) FROM pagos pg WHERE pg.cobrador_id = u.id AND pg.anulado_en IS NULL AND pg.fecha BETWEEN $${pU.length + 1} AND $${pU.length + 2}), 0)::bigint AS cobrado,
-              COALESCE((SELECT sum(p.monto_entregado) FROM prestamos p WHERE p.creado_por = u.id AND p.estado <> 'anulado' AND p.fecha_inicio BETWEEN $${pU.length + 1} AND $${pU.length + 2}), 0)::bigint AS prestado,
+              COALESCE((SELECT sum(pg.monto) FROM pagos pg WHERE pg.cobrador_id = u.id AND pg.anulado_en IS NULL AND pg.metodo <> 'renovacion' AND pg.fecha BETWEEN $${pU.length + 1} AND $${pU.length + 2}), 0)::bigint AS cobrado,
+              COALESCE((SELECT sum(p.monto_entregado - p.saldo_renovado) FROM prestamos p WHERE p.creado_por = u.id AND p.estado <> 'anulado' AND p.fecha_inicio BETWEEN $${pU.length + 1} AND $${pU.length + 2}), 0)::bigint AS prestado,
               (SELECT count(*) FROM cierres c WHERE c.usuario_id = u.id AND c.estado = 'con_fallo')::int AS fallos
          FROM usuarios u
         WHERE ${fU} AND u.estado = 'activo'

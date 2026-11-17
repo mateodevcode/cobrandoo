@@ -29,7 +29,7 @@ export async function resumen(yo) {
     query(
       `SELECT pg.fecha, sum(pg.monto)::bigint AS total
          FROM pagos pg
-        WHERE ${fG} AND pg.anulado_en IS NULL AND pg.fecha BETWEEN $${pG.length + 1} AND $${pG.length + 2}
+        WHERE ${fG} AND pg.anulado_en IS NULL AND pg.metodo <> 'renovacion' AND pg.fecha BETWEEN $${pG.length + 1} AND $${pG.length + 2}
         GROUP BY pg.fecha`,
       [...pG, lunes < desde7 ? lunes : desde7, hoy]
     ),
@@ -93,7 +93,7 @@ export async function rutaDelDia(yo, cobradorId = yo.id) {
               'dias_atraso', p.dias_atraso, 'valor_cuota', p.valor_cuota, 'saldo_interes', p.saldo_interes
             ) ORDER BY p.creado_en) AS prestamos,
             COALESCE((SELECT sum(pg.monto) FROM pagos pg
-                       WHERE pg.cliente_id = c.id AND pg.fecha = $2 AND pg.anulado_en IS NULL), 0)::bigint AS pagado_hoy
+                       WHERE pg.cliente_id = c.id AND pg.fecha = $2 AND pg.anulado_en IS NULL AND pg.metodo <> 'renovacion'), 0)::bigint AS pagado_hoy
        FROM clientes c
        JOIN prestamos p ON p.cliente_id = c.id AND p.estado = 'activo'
        LEFT JOIN rutas r ON r.id = c.ruta_id

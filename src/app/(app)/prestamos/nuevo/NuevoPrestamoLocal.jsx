@@ -24,14 +24,21 @@ export function NuevoPrestamoLocal() {
   }, [vista]);
 
   const cliente = clientes.find((c) => c.id === params.get("cliente")) ?? null;
+  // Renovación: préstamo activo de este cliente cuyo saldo se descuenta
+  const anterior = vista?.activos.find((p) => p.id === params.get("renueva") && p.cliente_id === cliente?.id);
+  const renovar = anterior ? { id: anterior.id, saldo: anterior.saldo } : null;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
       <Link href={cliente ? `/clientes/${cliente.id}` : "/clientes"} className="flex w-fit items-center gap-1 text-sm text-suave hover:text-texto">
         <ArrowLeft className="size-4" /> {cliente ? cliente.nombre : "Clientes"}
       </Link>
-      <h1 className="text-2xl font-bold">Nuevo préstamo</h1>
-      {!vista ? <CargandoDatos /> : <FormPrestamo key={cliente?.id ?? "sin"} cliente={cliente} clientes={clientes} hoy={hoyBogota()} />}
+      <h1 className="text-2xl font-bold">{renovar ? "Renovar préstamo" : "Nuevo préstamo"}</h1>
+      {!vista ? (
+        <CargandoDatos />
+      ) : (
+        <FormPrestamo key={`${cliente?.id ?? "sin"}-${renovar?.id ?? ""}`} cliente={cliente} clientes={clientes} hoy={hoyBogota()} renovar={renovar} />
+      )}
     </div>
   );
 }

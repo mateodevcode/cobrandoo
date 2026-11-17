@@ -10,7 +10,7 @@ export const METODOS_PAGO = [
   { id: "transferencia", nombre: "Transferencia" },
 ];
 export const IDS_METODOS_PAGO = METODOS_PAGO.map((m) => m.id);
-export const NOMBRE_METODO_PAGO = Object.fromEntries(METODOS_PAGO.map((m) => [m.id, m.nombre]));
+export const NOMBRE_METODO_PAGO = { ...Object.fromEntries(METODOS_PAGO.map((m) => [m.id, m.nombre])), renovacion: "Renovación" };
 
 export const BASES_INTERES = [
   {

@@ -4,9 +4,10 @@ import { ErrorApp } from "../http";
 import { filtroVisible, exigirVisible } from "../permisos";
 import { idsVisibles } from "../jerarquia";
 import { hoyBogota, diasEntre } from "@/lib/fechas";
+import { dinero } from "@/lib/formato";
 import { METODOS } from "@/lib/prestamos/metodos";
 import { simular } from "@/lib/prestamos/motor";
-import { registrarMovimiento, fechaDeOperacion } from "./caja.service";
+import { registrarMovimiento, fechaDeOperacion, obtenerJornada } from "./caja.service";
 import * as auditoria from "../repos/auditoria.repo";
 
 const VERSION_MOTOR = 1;
@@ -149,17 +150,29 @@ export async function crear(yo, d, ip) {
 
     const terminos = { ...d, fecha_inicio: fechaInicio };
     const plan = METODOS[d.metodo].generar(terminos);
-    const parametros = { version: VERSION_MOTOR, ...terminos, id: undefined, notas: undefined, creado_en_dispositivo: undefined };
+    const parametros = { version: VERSION_MOTOR, ...terminos, id: undefined, notas: undefined, creado_en_dispositivo: undefined, renueva_a: undefined };
+
+    // Renovación: el saldo de hoy del préstamo anterior se descuenta de lo que se entrega
+    let renovado = null;
+    if (d.renueva_a) {
+      if (!d.registrar_desembolso || fechaInicio !== hoy) throw new ErrorApp(400, "Una renovación se hace con fecha de hoy y saliendo de la caja", "renovacion_invalida");
+      const v = await cargarParaCalcular(db, d.renueva_a);
+      if (!v || v.cliente_id !== cliente.id) throw new ErrorApp(400, "El préstamo a renovar no es de este cliente", "renovacion_invalida");
+      if (v.estado !== "activo") throw new ErrorApp(409, "Ese préstamo ya no está activo", "prestamo_cerrado");
+      const saldo = calcular(v, v.pagos_validos, hoy).saldo;
+      if (saldo > plan.entregado) throw new ErrorApp(400, `Para renovar, el préstamo nuevo debe entregar al menos ${dinero(saldo)} (lo que debe hoy)`, "renovacion_insuficiente");
+      renovado = { v, saldo };
+    }
 
     const { rows } = await db.query(
       `INSERT INTO prestamos (id, organizacion_id, cliente_id, cobrador_id, metodo, parametros, capital, tasa, base_interes,
                              frecuencia, n_cuotas, valor_cuota, recargo_tipo, recargo_valor, metodo_desembolso,
-                             fecha_inicio, fecha_vencimiento, proximo_corte, notas, creado_por, monto_entregado)
-       VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+                             fecha_inicio, fecha_vencimiento, proximo_corte, notas, creado_por, monto_entregado, renueva_a, saldo_renovado)
+       VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING id`,
       [d.id ?? null, yo.org, cliente.id, cliente.cobrador_id, d.metodo, JSON.stringify(parametros), d.capital, d.tasa,
        d.base_interes, d.frecuencia, d.n_cuotas, plan.valor_cuota, d.recargo_tipo, d.recargo_valor, d.metodo_desembolso,
-       fechaInicio, plan.fecha_vencimiento, plan.proximo_corte, d.notas, yo.id, plan.entregado]
+       fechaInicio, plan.fecha_vencimiento, plan.proximo_corte, d.notas, yo.id, plan.entregado, renovado?.v.id ?? null, renovado?.saldo ?? 0]
     );
     const id = rows[0].id;
 
@@ -174,11 +187,22 @@ export async function crear(yo, d, ip) {
     // El dinero sale de la caja de quien presta (hoy). Un préstamo antiguo que se está
     // registrando en el sistema puede marcarse para no mover la caja.
     // (Con interés descontado sale de caja menos que el capital.)
-    if (d.registrar_desembolso && plan.entregado > 0) {
+    if (renovado && renovado.saldo > 0) {
+      // Se salda el préstamo anterior con lo que debía (sin dinero en mano: no toca la caja)
+      const jornada = await obtenerJornada(db, { organizacionId: yo.org, usuarioId: yo.id, paraEscribir: true });
+      await db.query(
+        `INSERT INTO pagos (id, organizacion_id, prestamo_id, cliente_id, cobrador_id, jornada_id, monto, metodo, fecha, nota)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'renovacion', $7, $8)`,
+        [yo.org, renovado.v.id, cliente.id, yo.id, jornada.id, renovado.saldo, hoy, "Saldado al renovar"]
+      );
+      await recalcular(db, renovado.v.id, hoy);
+    }
+    const sale = plan.entregado - (renovado?.saldo ?? 0);
+    if (d.registrar_desembolso && sale > 0) {
       await registrarMovimiento(db, {
-        organizacionId: yo.org, usuarioId: yo.id, tipo: "desembolso", metodo: d.metodo_desembolso, monto: -plan.entregado,
+        organizacionId: yo.org, usuarioId: yo.id, tipo: "desembolso", metodo: d.metodo_desembolso, monto: -sale,
         fecha: fechaDeOperacion(d.creado_en_dispositivo),
-        descripcion: `Préstamo a ${cliente.nombre}`, refTipo: "prestamo", refId: id, creadoPor: yo.id,
+        descripcion: renovado ? `Renovación a ${cliente.nombre}` : `Préstamo a ${cliente.nombre}`, refTipo: "prestamo", refId: id, creadoPor: yo.id,
         creadoEnDispositivo: d.creado_en_dispositivo,
       });
     }
@@ -186,7 +210,7 @@ export async function crear(yo, d, ip) {
     await recalcular(db, id, hoy);
     await auditoria.registrar(db, {
       organizacionId: yo.org, usuarioId: yo.id, accion: "prestamo.crear", entidad: "prestamo", entidadId: id,
-      datos: { cliente: cliente.id, metodo: d.metodo, capital: d.capital, tasa: d.tasa }, ip,
+      datos: { cliente: cliente.id, metodo: d.metodo, capital: d.capital, tasa: d.tasa, renueva_a: renovado?.v.id, saldo_renovado: renovado?.saldo }, ip,
     });
     return { id };
   });
@@ -240,7 +264,8 @@ export async function obtener(yo, id) {
   const [{ rows: ps }, { rows: cuotas }, { rows: cargos }, { rows: pagos }] = await Promise.all([
     query(
       `SELECT p.*, c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, u.nombre AS cobrador_nombre,
-              cr.nombre AS creado_por_nombre, an.nombre AS anulado_por_nombre
+              cr.nombre AS creado_por_nombre, an.nombre AS anulado_por_nombre,
+              (SELECT r.id FROM prestamos r WHERE r.renueva_a = p.id AND r.estado <> 'anulado' LIMIT 1) AS renovado_por
          FROM prestamos p
          JOIN clientes c ON c.id = p.cliente_id
          JOIN usuarios u ON u.id = p.cobrador_id
@@ -305,6 +330,16 @@ export async function anular(yo, id, motivo, ip) {
         organizacionId: p.organizacion_id, usuarioId: m.usuario_id, jornadaId: m.jornada_id, tipo: "anulacion",
         metodo: m.metodo, monto: -m.monto, descripcion: `Anulación de préstamo: ${motivo}`, refTipo: "prestamo", refId: id, creadoPor: yo.id,
       });
+    }
+    // Si era una renovación, el préstamo anterior vuelve a quedar como estaba
+    if (p.renueva_a) {
+      await db.query(
+        `UPDATE pagos SET anulado_en = now(), anulado_por = $2, motivo_anulacion = $3
+          WHERE prestamo_id = $1 AND metodo = 'renovacion' AND anulado_en IS NULL`,
+        [p.renueva_a, yo.id, "Se anuló la renovación"]
+      );
+      await db.query(`UPDATE prestamos SET estado = 'activo', pagado_en = NULL WHERE id = $1 AND estado = 'pagado'`, [p.renueva_a]);
+      await recalcular(db, p.renueva_a);
     }
     await auditoria.registrar(db, { organizacionId: p.organizacion_id, usuarioId: yo.id, accion: "prestamo.anular", entidad: "prestamo", entidadId: id, datos: { motivo }, ip });
     return { id };

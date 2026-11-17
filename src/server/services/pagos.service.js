@@ -94,6 +94,7 @@ export async function anular(yo, pagoId, motivo, ip) {
     if (!pg) throw new ErrorApp(404, "Pago no encontrado", "no_encontrado");
     await exigirVisible(yo, pg.prestamo_cobrador, pg.organizacion_id);
     if (pg.anulado_en) return { id: pagoId };
+    if (pg.metodo === "renovacion") throw new ErrorApp(409, "Este saldo se pagó con una renovación. Para deshacerlo, anula el préstamo nuevo.", "es_renovacion");
     if (yo.rol === "cobrador" && (pg.cobrador_id !== yo.id || pg.fecha !== hoyBogota())) {
       throw new ErrorApp(403, "Solo puedes anular tus cobros de hoy. Pídeselo a tu jefe.", "prohibido");
     }
