@@ -27,7 +27,8 @@ export const ESTADO_CIERRE = {
  * Cierre del día del cobrador: cuenta el efectivo y se lo entrega todo al jefe.
  * Muestra también días anteriores que quedaron sin cerrar.
  */
-export function CierreDia() {
+export function CierreDia({ rol }) {
+  const jefe = rol === "supervisor" ? "el dueño" : "tu jefe";
   const router = useRouter();
   const { pendientes, enLinea } = useSync();
   const [estado, setEstado] = useState(null);
@@ -97,6 +98,7 @@ export function CierreDia() {
         <FormCierre
           fecha={cerrando}
           esHoy={cerrando === estado.fecha}
+          jefe={jefe}
           onCerrar={() => setCerrando(null)}
           onListo={() => {
             setCerrando(null);
@@ -110,7 +112,7 @@ export function CierreDia() {
   );
 }
 
-function FormCierre({ fecha, esHoy, onCerrar, onListo }) {
+function FormCierre({ fecha, esHoy, jefe, onCerrar, onListo }) {
   const [datos, setDatos] = useState(null);
   const [contado, setContado] = useState(0);
   const [observacion, setObservacion] = useState("");
@@ -135,7 +137,7 @@ function FormCierre({ fecha, esHoy, onCerrar, onListo }) {
     setError("");
     try {
       await api("/api/cierres", { method: "POST", body: { efectivo_contado: contado, observacion, fecha } });
-      toast.success("Día cerrado", { description: "Tu jefe recibió el aviso para revisarlo." });
+      toast.success("Día cerrado", { description: `${jefe[0].toUpperCase() + jefe.slice(1)} recibió el aviso para revisarlo.` });
       onListo();
     } catch (err) {
       setError(err.campos?.[0]?.mensaje || err.message);
@@ -144,7 +146,7 @@ function FormCierre({ fecha, esHoy, onCerrar, onListo }) {
   }
 
   return (
-    <Hoja abierta onCerrar={onCerrar} titulo={esHoy ? "Cerrar el día" : `Cerrar el ${fmtFecha(fecha)}`} descripcion="Cuenta el efectivo que tienes y entrégaselo todo a tu jefe.">
+    <Hoja abierta onCerrar={onCerrar} titulo={esHoy ? "Cerrar el día" : `Cerrar el ${fmtFecha(fecha)}`} descripcion={`Cuenta el efectivo que tienes y entrégaselo todo a ${jefe}.`}>
       {!datos ? (
         <p className="py-6 text-center text-sm text-suave">{error || "Calculando…"}</p>
       ) : (
@@ -182,7 +184,7 @@ function FormCierre({ fecha, esHoy, onCerrar, onListo }) {
           />
 
           {error && <p className="rounded-xl bg-peligro-suave px-3 py-2 text-sm text-peligro">{error}</p>}
-          <p className="text-xs text-suave">Al cerrar, la caja de ese día ya no acepta cobros ni gastos. Tu jefe revisará el cuadre.</p>
+          <p className="text-xs text-suave">Al cerrar, la caja de ese día ya no acepta cobros ni gastos. {jefe[0].toUpperCase() + jefe.slice(1)} revisará el cuadre.</p>
           <Boton type="submit" tamano="lg" cargando={enviando}>
             Cerrar y entregar {dinero(contado)}
           </Boton>

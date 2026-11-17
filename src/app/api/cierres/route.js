@@ -14,7 +14,7 @@ export const GET = manejar(async (req) => {
 });
 
 export const POST = manejar(async (req) => {
-  const yo = await exigirUsuario(["cobrador"]);
+  const yo = await exigirUsuario(["cobrador", "supervisor"]);
   const datos = cierreSchema.parse(await leerJson(req));
   return ok({ cierre: await cierres.cerrarDia(yo, datos, ipDe(req)) }, { status: 201 });
 });

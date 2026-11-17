@@ -13,7 +13,8 @@ export default async function PaginaCuadres({ searchParams }) {
   // "todos" = historial completo (sin filtro de estado); una vista desconocida cae en "por atender"
   const FILTRO = { abiertos: "abiertos", pendientes: "pendiente", fallos: "con_fallo", todos: null };
   const estado = vista in FILTRO ? FILTRO[vista] ?? undefined : "abiertos";
-  const lista = await cierres.listar(yo, { estado });
+  // Los cierres propios del supervisor los revisa el dueño: aquí solo los de su equipo
+  const lista = (await cierres.listar(yo, { estado })).filter((c) => c.usuario_id !== yo.id);
   const pendientes = lista.filter((c) => c.estado === "pendiente").length;
 
   return (
@@ -21,7 +22,7 @@ export default async function PaginaCuadres({ searchParams }) {
       <header>
         <h1 className="text-2xl font-bold">Cuadres</h1>
         <p className="text-sm text-suave">
-          Revisa el cierre del día de cada cobrador. {vista === "abiertos" && pendientes > 0 && `${pendientes} por revisar.`}
+          Revisa el cierre del día de {yo.rol === "dueno" ? "cada cobrador y supervisor" : "cada cobrador"}. {vista === "abiertos" && pendientes > 0 && `${pendientes} por revisar.`}
         </p>
       </header>
 

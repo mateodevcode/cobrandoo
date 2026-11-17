@@ -56,11 +56,12 @@ export async function estado(yo, fecha = hoyBogota()) {
 }
 
 /**
- * El cobrador cierra el día: cuenta el efectivo, se lo entrega todo a su jefe y el cierre
- * queda pendiente de revisión. La caja de ese día ya no acepta movimientos.
+ * El cobrador (o el supervisor) cierra el día: cuenta el efectivo, se lo entrega todo a su jefe
+ * y el cierre queda pendiente de revisión. La caja de ese día ya no acepta movimientos.
+ * Cobrador → supervisor o dueño; supervisor → dueño.
  */
 export async function cerrarDia(yo, { efectivo_contado, observacion, fecha }, ip) {
-  if (yo.rol !== "cobrador") throw new ErrorApp(403, "El cierre del día lo hace el cobrador", "prohibido");
+  if (!["cobrador", "supervisor"].includes(yo.rol)) throw new ErrorApp(403, "El dueño no cierra el día: recibe los cierres de su equipo", "prohibido");
   const hoy = hoyBogota();
   const dia = fecha ?? hoy;
   if (dia > hoy) throw new ErrorApp(400, "No puedes cerrar un día futuro", "fecha_invalida");
@@ -94,6 +95,7 @@ export async function cerrarDia(yo, { efectivo_contado, observacion, fecha }, ip
         await registrarMovimiento(db, {
           organizacionId: yo.org, usuarioId: jefeId, tipo: "recibido", metodo: "efectivo", monto: efectivo_contado,
           descripcion: `Entrega de ${yo.nombre} (${fmtFecha(dia)})`, contraparteId: yo.id, refTipo: "cierre", refId: cierre.id, creadoPor: yo.id,
+          alSiguienteDia: true, // si el jefe ya cerró su día, la entrega entra en su caja de mañana
         });
       }
     }

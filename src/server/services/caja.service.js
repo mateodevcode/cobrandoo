@@ -10,8 +10,10 @@ import * as auditoria from "../repos/auditoria.repo";
  * Con `paraEscribir`: un día ya cerrado no recibe movimientos. Si es un día anterior
  * (p. ej. un cobro sin señal que llegó después del cierre) se anota en la caja de hoy;
  * si hoy ya está cerrado, se rechaza.
+ * Con `alSiguienteDia`: si hoy ya está cerrado, el movimiento pasa a la caja de mañana. Se usa para
+ * dinero que le LLEGA a alguien por acción de otro (entrega de un cierre, base), que no debe fallar.
  */
-export async function obtenerJornada(db, { organizacionId, usuarioId, fecha = hoyBogota(), paraEscribir = false }) {
+export async function obtenerJornada(db, { organizacionId, usuarioId, fecha = hoyBogota(), paraEscribir = false, alSiguienteDia = false }) {
   const { rows } = await db.query(
     `INSERT INTO jornadas (organizacion_id, usuario_id, fecha) VALUES ($1, $2, $3)
      ON CONFLICT (usuario_id, fecha) DO UPDATE SET usuario_id = EXCLUDED.usuario_id
@@ -21,7 +23,8 @@ export async function obtenerJornada(db, { organizacionId, usuarioId, fecha = ho
   const j = rows[0];
   if (!paraEscribir || j.estado === "abierta") return j;
   const hoy = hoyBogota();
-  if (fecha < hoy) return obtenerJornada(db, { organizacionId, usuarioId, fecha: hoy, paraEscribir: true });
+  if (fecha < hoy) return obtenerJornada(db, { organizacionId, usuarioId, fecha: hoy, paraEscribir: true, alSiguienteDia });
+  if (alSiguienteDia) return obtenerJornada(db, { organizacionId, usuarioId, fecha: sumarDias(fecha, 1), paraEscribir: true, alSiguienteDia });
   throw new ErrorApp(409, "La caja de hoy ya está cerrada. Habla con tu jefe para registrar este movimiento.", "dia_cerrado");
 }
 
@@ -53,9 +56,9 @@ export async function registrarMovimiento(db, m) {
   let jornada;
   if (m.jornadaId) {
     const { rows: js } = await db.query(`SELECT id, estado FROM jornadas WHERE id = $1`, [m.jornadaId]);
-    jornada = js[0]?.estado === "abierta" ? js[0] : await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId, paraEscribir: true });
+    jornada = js[0]?.estado === "abierta" ? js[0] : await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId, paraEscribir: true, alSiguienteDia: m.alSiguienteDia });
   } else {
-    jornada = await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId, fecha: m.fecha, paraEscribir: true });
+    jornada = await obtenerJornada(db, { organizacionId: m.organizacionId, usuarioId: m.usuarioId, fecha: m.fecha, paraEscribir: true, alSiguienteDia: m.alSiguienteDia });
   }
   const { rows } = await db.query(
     `INSERT INTO movimientos_caja (id, organizacion_id, usuario_id, jornada_id, tipo, metodo, monto, categoria,
@@ -105,7 +108,7 @@ export async function entregarBase(yo, d, ip) {
   return transaccion(async (db) => {
     const r = await registrarMovimiento(db, {
       id: d.id, organizacionId: yo.org, usuarioId: cob.id, tipo: "base", metodo: d.metodo, monto: d.monto, fecha,
-      creadoEnDispositivo: d.creado_en_dispositivo,
+      creadoEnDispositivo: d.creado_en_dispositivo, alSiguienteDia: true,
       descripcion: d.descripcion ?? `Base entregada por ${yo.nombre}`, contraparteId: yo.id, creadoPor: yo.id,
     });
     if (!r.duplicado) {

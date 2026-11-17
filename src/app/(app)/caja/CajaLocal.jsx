@@ -14,7 +14,7 @@ export function CajaLocal({ usuarioId, rol }) {
   const vista = useVista();
   const caja = cajaDe(vista, usuarioId);
   if (!caja) return <CargandoDatos />;
-  const esCobrador = rol === "cobrador";
+  const cierraDia = rol === "cobrador" || rol === "supervisor";
   return (
     <>
       <VistaCaja
@@ -28,7 +28,7 @@ export function CajaLocal({ usuarioId, rol }) {
               ←
             </Link>
             <span className="font-medium">Hoy</span>
-            {esCobrador && (
+            {cierraDia && (
               <Link href="/caja/cierres" className="ml-2 text-xs font-semibold text-primario">
                 Mis cierres
               </Link>
@@ -44,7 +44,7 @@ export function CajaLocal({ usuarioId, rol }) {
           )
         }
       />
-      {esCobrador && <CierreDia />}
+      {cierraDia && <CierreDia rol={rol} />}
     </>
   );
 }
