@@ -13,6 +13,7 @@ import {
   UsersRound,
   HandCoins,
   BookOpen,
+  AlertTriangle,
 } from "lucide-react";
 
 export function menuPara(rol) {
@@ -26,6 +27,7 @@ export function menuPara(rol) {
       { href: "/caja", etiqueta: "Caja", icono: Wallet, barra: true },
       { href: "/clientes", etiqueta: "Clientes", icono: Users },
       { href: "/prestamos", etiqueta: "Préstamos", icono: HandCoins },
+      { href: "/morosos", etiqueta: "Morosos", icono: AlertTriangle },
       { href: "/metodos", etiqueta: "Métodos", icono: BookOpen },
     ];
   }
@@ -36,6 +38,7 @@ export function menuPara(rol) {
     { href: "/equipo", etiqueta: "Equipo", icono: UsersRound, barra: true },
     { href: "/clientes", etiqueta: "Clientes", icono: Users },
     { href: "/prestamos", etiqueta: "Préstamos", icono: HandCoins },
+    { href: "/morosos", etiqueta: "Morosos", icono: AlertTriangle },
     { href: "/ruta", etiqueta: "Rutas", icono: Route },
     { href: "/caja", etiqueta: "Mi caja", icono: Wallet },
     { href: "/reportes", etiqueta: "Reportes", icono: BarChart3 },
