@@ -8,7 +8,8 @@ import * as auditoria from "../repos/auditoria.repo";
 const nuevoToken = () => randomBytes(24).toString("base64url");
 
 const COLS = `c.id, c.organizacion_id, c.cobrador_id, c.ruta_id, c.orden_ruta, c.nombre, c.cedula, c.telefono,
-  c.direccion, c.barrio, c.ciudad, c.referencia, c.notas, c.estado, c.creado_en, c.actualizado_en`;
+  c.direccion, c.barrio, c.ciudad, c.referencia, c.notas, c.estado, c.creado_en, c.actualizado_en,
+  c.latitud::float8 AS latitud, c.longitud::float8 AS longitud, c.ubicacion_precision`;
 
 /** Lista de clientes visibles con resumen de su deuda. */
 export async function listar(yo, { q, estado = "activo", rutaId, cobradorId, conDeuda } = {}) {
@@ -86,13 +87,13 @@ export async function crear(yo, d, ip) {
     try {
       const { rows } = await db.query(
         `INSERT INTO clientes (id, organizacion_id, cobrador_id, ruta_id, orden_ruta, nombre, cedula, telefono, direccion,
-                               barrio, ciudad, referencia, notas, token_publico, creado_por)
+                               barrio, ciudad, referencia, notas, token_publico, creado_por, latitud, longitud, ubicacion_precision)
          VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4,
                  COALESCE((SELECT max(orden_ruta) + 1 FROM clientes WHERE cobrador_id = $3 AND ruta_id IS NOT DISTINCT FROM $4), 0),
-                 $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                 $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
          RETURNING id`,
         [d.id ?? null, yo.org, cobradorId, d.ruta_id, d.nombre, d.cedula, d.telefono, d.direccion, d.barrio, d.ciudad,
-         d.referencia, d.notas, nuevoToken(), yo.id]
+         d.referencia, d.notas, nuevoToken(), yo.id, d.latitud ?? null, d.longitud ?? null, d.ubicacion_precision ?? null]
       );
       await auditoria.registrar(db, { organizacionId: yo.org, usuarioId: yo.id, accion: "cliente.crear", entidad: "cliente", entidadId: rows[0].id, ip });
       return { id: rows[0].id };
@@ -118,7 +119,7 @@ export async function actualizar(yo, id, cambios, ip) {
     }
     if (cambios.ruta_id !== undefined) await validarRuta(db, cambios.ruta_id, cobradorId);
 
-    const permitidos = ["ruta_id", "nombre", "cedula", "telefono", "direccion", "barrio", "ciudad", "referencia", "notas", "estado"];
+    const permitidos = ["ruta_id", "nombre", "cedula", "telefono", "direccion", "barrio", "ciudad", "referencia", "notas", "estado", "latitud", "longitud", "ubicacion_precision"];
     const sets = [];
     const params = [id];
     if (cobradorId !== actual.cobrador_id) {

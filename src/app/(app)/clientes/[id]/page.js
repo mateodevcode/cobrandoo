@@ -10,6 +10,10 @@ import { Avatar, Insignia } from "@/components/ui/Insignia";
 import { BotonCobrar } from "@/components/negocio/BotonCobrar";
 import { CompartirHistorial } from "@/components/negocio/CompartirHistorial";
 import { METODOS } from "@/lib/prestamos/metodos";
+import { FotosCliente } from "@/components/negocio/FotosCliente";
+import { fotosDe } from "@/server/services/fotos.service";
+import { s3Configurado } from "@/server/s3";
+import { Map as IconoMapa } from "lucide-react";
 import { dinero, fecha } from "@/lib/formato";
 
 export const metadata = { title: "Cliente" };
@@ -22,7 +26,7 @@ export default async function PaginaCliente({ params }) {
   if (!z.uuid().safeParse(id).success) notFound();
   const cliente = await clientes.obtener(yo, id).catch(() => null);
   if (!cliente) notFound();
-  const lista = await prestamos.listar(yo, { clienteId: id, estado: "todos" });
+  const [lista, fotos] = await Promise.all([prestamos.listar(yo, { clienteId: id, estado: "todos" }), fotosDe(yo, id).catch(() => [])]);
   const activos = lista.filter((p) => p.estado === "activo");
   const deuda = activos.reduce((s, p) => s + p.saldo, 0);
   const tel = cliente.telefono?.replace(/\D/g, "");
@@ -66,12 +70,24 @@ export default async function PaginaCliente({ params }) {
               </a>
             </>
           )}
+          {cliente.latitud != null && (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${cliente.latitud},${cliente.longitud}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-borde px-3 text-sm font-medium hover:bg-fondo"
+            >
+              <IconoMapa className="size-4" /> Cómo llegar
+            </a>
+          )}
           <CompartirHistorial clienteId={cliente.id} nombre={cliente.nombre} telefono={cliente.telefono} token={cliente.token_publico} />
           {activos.length > 0 && <BotonCobrar clienteId={cliente.id} cliente={cliente.nombre} prestamos={activos} tamano="sm" />}
         </div>
 
         {cliente.notas && <p className="mt-4 rounded-xl bg-fondo p-3 text-sm text-suave">{cliente.notas}</p>}
       </section>
+
+      {s3Configurado() && <FotosCliente clienteId={cliente.id} nombre={cliente.nombre} fotos={fotos} puedeQuitar={yo.rol !== "cobrador"} />}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="tarjeta p-4">

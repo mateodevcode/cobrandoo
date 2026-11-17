@@ -6,7 +6,7 @@ import { useSync } from "@/lib/offline/hooks";
 import { FormCliente } from "@/components/negocio/FormCliente";
 import { CargandoDatos } from "@/components/offline/CargandoDatos";
 
-export function NuevoClienteLocal({ usuarioId, esJefe }) {
+export function NuevoClienteLocal({ usuarioId, esJefe, fotosActivas }) {
   const { datos } = useSync();
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4">
@@ -14,7 +14,7 @@ export function NuevoClienteLocal({ usuarioId, esJefe }) {
         <ArrowLeft className="size-4" /> Clientes
       </Link>
       <h1 className="text-2xl font-bold">Nuevo cliente</h1>
-      {esJefe && !datos ? <CargandoDatos /> : <FormCliente usuarioId={usuarioId} cobradores={datos?.cobradores ?? []} esJefe={esJefe} />}
+      {esJefe && !datos ? <CargandoDatos /> : <FormCliente usuarioId={usuarioId} cobradores={datos?.cobradores ?? []} esJefe={esJefe} fotosActivas={fotosActivas} />}
     </div>
   );
 }

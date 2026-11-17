@@ -27,11 +27,12 @@ export function refrescarSesion() {
  * @param {boolean} op.redirigir  si la sesión murió, ir al login (false en la sincronización de fondo)
  */
 export async function api(url, { method = "GET", body, reintento = true, redirigir = true, signal } = {}) {
+  const esForm = typeof FormData !== "undefined" && body instanceof FormData; // archivos (fotos)
   const res = await fetch(url, {
     method,
     credentials: "same-origin",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body && !esForm ? { "Content-Type": "application/json" } : undefined,
+    body: body ? (esForm ? body : JSON.stringify(body)) : undefined,
     signal,
   });
 

@@ -10,14 +10,17 @@ import { api } from "@/lib/api";
 import { sincronizador } from "@/lib/offline/sync";
 import { pedirTexto } from "@/components/ui/Dialogos";
 import { useSync } from "@/lib/offline/hooks";
+import { CapturaFotos, encolarFoto, RANURAS } from "./CapturaFotos";
+import { CapturaUbicacion } from "./CapturaUbicacion";
 
 /**
  * Crear (funciona sin señal) o editar (necesita internet) un cliente.
  * @param usuarioId   usuario de la sesión (si es cobrador, es su propio cobrador)
  * @param cobradores  [{id, nombre}] que puede elegir un jefe
  * @param cliente     datos actuales (edición) o undefined (nuevo)
+ * @param fotosActivas  el almacenamiento de fotos está configurado: al crear, mínimo una foto
  */
-export function FormCliente({ usuarioId, cobradores, cliente, esJefe }) {
+export function FormCliente({ usuarioId, cobradores, cliente, esJefe, fotosActivas = false }) {
   const router = useRouter();
   const { datos } = useSync();
   const editando = !!cliente;
@@ -27,6 +30,10 @@ export function FormCliente({ usuarioId, cobradores, cliente, esJefe }) {
   const [rutaId, setRutaId] = useState(cliente?.ruta_id ?? "");
   const [errores, setErrores] = useState({});
   const [enviando, setEnviando] = useState(false);
+  const [fotos, setFotos] = useState({ casa: null, cedula: null });
+  const [ubicacion, setUbicacion] = useState(
+    cliente?.latitud != null ? { latitud: cliente.latitud, longitud: cliente.longitud, ubicacion_precision: cliente.ubicacion_precision } : null
+  );
 
   async function nuevaRuta() {
     if (!navigator.onLine) return toast.error("Necesitas internet para crear una ruta nueva");
@@ -57,7 +64,13 @@ export function FormCliente({ usuarioId, cobradores, cliente, esJefe }) {
     const f = Object.fromEntries(new FormData(e.currentTarget));
     if (!f.nombre?.trim() || f.nombre.trim().length < 2) return setErrores({ nombre: "Escribe el nombre" });
     if (esJefe && !cobradorId) return setErrores({ cobrador_id: "Elige el cobrador" });
-    const datosForm = { ...f, ruta_id: rutaId || null, ...(esJefe ? { cobrador_id: cobradorId } : {}) };
+    if (!editando && fotosActivas && !fotos.casa && !fotos.cedula) return setErrores({ fotos: "Toma al menos una foto (la casa o la cédula)" });
+    const datosForm = {
+      ...f,
+      ruta_id: rutaId || null,
+      ...(esJefe ? { cobrador_id: cobradorId } : {}),
+      ...(ubicacion ?? (editando ? { latitud: null, longitud: null, ubicacion_precision: null } : {})),
+    };
     setEnviando(true);
 
     if (editando) {
@@ -86,6 +99,10 @@ export function FormCliente({ usuarioId, cobradores, cliente, esJefe }) {
     if (r.error) {
       await sincronizador.descartar(id);
       return mostrarError(null, r.error);
+    }
+    // Las fotos van detrás del cliente en la cola: se suben solas aunque ahora no haya señal
+    for (const { tipo } of RANURAS) {
+      if (fotos[tipo]) await encolarFoto({ clienteId: id, tipo, blob: fotos[tipo], nombreCliente: f.nombre });
     }
     if (r.enviado) {
       toast.success("Cliente creado");
@@ -149,6 +166,9 @@ export function FormCliente({ usuarioId, cobradores, cliente, esJefe }) {
           <Plus className="size-4" />
         </Boton>
       </div>
+
+      {!editando && fotosActivas && <CapturaFotos valor={fotos} onCambio={setFotos} error={errores.fotos} />}
+      <CapturaUbicacion valor={ubicacion} onCambio={setUbicacion} />
 
       <Campo etiqueta="Recomendado por" name="referencia" defaultValue={cliente?.referencia ?? ""} />
       <Campo as="textarea" etiqueta="Notas" name="notas" defaultValue={cliente?.notas ?? ""} rows={3} className="sm:col-span-2 [&_textarea]:h-auto [&_textarea]:py-2.5" />

@@ -46,6 +46,9 @@ export const clienteSchema = z.object({
   ciudad: opcional(80),
   referencia: opcional(100),
   notas: opcional(500),
+  latitud: z.number().min(-90).max(90).nullish(),
+  longitud: z.number().min(-180).max(180).nullish(),
+  ubicacion_precision: z.number().int().min(0).max(100000).nullish(),
 });
 
 export const clienteCambiosSchema = z.object({
@@ -60,6 +63,9 @@ export const clienteCambiosSchema = z.object({
   referencia: opcionalCambio(100),
   notas: opcionalCambio(500),
   estado: z.enum(["activo", "inactivo"]).optional(),
+  latitud: z.number().min(-90).max(90).nullish(),
+  longitud: z.number().min(-180).max(180).nullish(),
+  ubicacion_precision: z.number().int().min(0).max(100000).nullish(),
 });
 
 // ===== Rutas =====

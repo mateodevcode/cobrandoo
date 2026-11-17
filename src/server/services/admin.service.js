@@ -8,6 +8,7 @@ import * as orgRepo from "../repos/organizaciones.repo";
 import * as sesionesRepo from "../repos/sesiones.repo";
 import * as auditoria from "../repos/auditoria.repo";
 import { olvidarVigencia } from "../auth/session";
+import { borrarPrefijo, prefijoOrganizacion } from "../s3";
 
 /** Valida que `jefeId` sea un jefe válido para `rol` dentro de la organización. */
 async function validarJefe(db, { rol, organizacionId, jefeId, usuarioId }) {
@@ -209,6 +210,13 @@ export async function eliminarUsuario(admin, id, { reasignar_a: reasignarA } = {
  * caja, cierres, avisos). No se puede deshacer: exige escribir el nombre exacto como confirmación.
  */
 export async function eliminarOrganizacion(admin, id, { confirmacion }, ip) {
+  const r = await eliminarOrganizacionBd(admin, id, { confirmacion }, ip);
+  // Las fotos de sus clientes en S3 también se borran (después de confirmar en la base)
+  await borrarPrefijo(prefijoOrganizacion(id)).catch((e) => console.error("[s3] no se pudieron borrar las fotos de la organización", id, e.message));
+  return r;
+}
+
+async function eliminarOrganizacionBd(admin, id, { confirmacion }, ip) {
   return transaccion(async (db) => {
     const { rows } = await db.query(`SELECT id, nombre FROM organizaciones WHERE id = $1 FOR UPDATE`, [id]);
     const org = rows[0];

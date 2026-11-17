@@ -8,6 +8,16 @@ import * as local from "./db";
 
 const INTERVALO_MS = 45_000;
 const TIMEOUT_MS = 20_000;
+const TIMEOUT_ARCHIVO_MS = 90_000; // fotos con señal lenta
+
+/** Las operaciones con archivo (fotos) viajan como formulario; el resto, como JSON. */
+function cuerpo(op) {
+  if (!op.archivo) return op.body;
+  const f = new FormData();
+  for (const [k, v] of Object.entries(op.body)) f.append(k, v);
+  f.append("archivo", op.archivo, `${op.body.id}.jpg`);
+  return f;
+}
 
 /** ¿El error significa "no hay red" (reintentar luego) y no "el servidor lo rechazó"? */
 const esErrorDeRed = (err) =>
@@ -143,7 +153,7 @@ class Sincronizador {
       for (const op of await local.listarPendientes(this.estado.usuarioId)) {
         if (op.estado === "error") continue;
         try {
-          await api(op.url, { method: "POST", body: op.body, redirigir: false, signal: AbortSignal.timeout(TIMEOUT_MS) });
+          await api(op.url, { method: "POST", body: cuerpo(op), redirigir: false, signal: AbortSignal.timeout(op.archivo ? TIMEOUT_ARCHIVO_MS : TIMEOUT_MS) });
           await local.borrarPendiente(op.id);
           aplicadas++;
           this.set({ enLinea: true, sesionVencida: false });
